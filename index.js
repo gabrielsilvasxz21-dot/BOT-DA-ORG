@@ -1,20 +1,22 @@
-
 const {
   Client,
   GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
   ChannelType,
-  PermissionFlagsBits,
-  EmbedBuilder
+  PermissionFlagsBits
 } = require("discord.js");
 
 const TOKEN = process.env.DISCORD_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
 
-if (!TOKEN) {
-  console.log("ERRO: Configure DISCORD_TOKEN no Railway.");
+if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
+  console.log("Configure as variáveis do Railway.");
   process.exit(1);
 }
 
-// ESTRUTURA COMPLETA DO SERVIDOR
 const estrutura = [
   ["Informações", [
     ["text", "⚡ ・ rumo-150k"],
@@ -142,160 +144,127 @@ const estrutura = [
   ]]
 ];
 
-// CLIENTE DO DISCORD
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-// CONTROLE PARA NÃO EXECUTAR DUAS VEZES
-const criandoServidores = new Set();
-
-// BOT ONLINE
-client.once("ready", () => {
-  console.log("==================================");
-  console.log("CENTRAL DE GB SYSTEM");
-  console.log("Bot conectado: " + client.user.tag);
-  console.log("Comando: .criar");
-  console.log("==================================");
-});
-
-// COMANDO .CRIAR
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-  if (!message.guild) return;
-  if (message.content.trim().toLowerCase() !== ".criar") return;
-
-  if (!message.member.permissions.has(
+const comando = new SlashCommandBuilder()
+  .setName("criar-estrutura")
+  .setDescription("Cria todas as categorias e canais")
+  .setDefaultMemberPermissions(
     PermissionFlagsBits.ManageChannels
-  )) {
-    return message.reply(
-      "❌ Você precisa da permissão Gerenciar canais."
-    );
-  }
+  );
 
-  const guildId = message.guild.id;
+client.once("ready", async function () {
+  console.log("Bot conectado: " + client.user.tag);
 
-  if (criandoServidores.has(guildId)) {
-    return message.reply(
-      "⏳ A estrutura já está sendo criada neste servidor!"
-    );
-  }
-
-  criandoServidores.add(guildId);
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
 
   try {
-    // MENSAGEM INICIAL
-    const inicio = new EmbedBuilder()
-      .setColor("#5865F2")
-      .setTitle("🚀 CENTRAL DE GB SYSTEM")
-      .setDescription(
-        "**Está começando a criar a estrutura do servidor!**\n\n" +
-        "⏳ Aguarde enquanto as categorias e canais são criados.\n\n" +
-        "📂 Preparando estrutura..."
-      )
-      .setFooter({
-        text: "GB SYSTEM • Sistema de organização"
-      })
-      .setTimestamp();
-
-    const status = await message.reply({
-      embeds: [inicio]
-    });
-
-    let criados = 0;
-    let existentes = 0;
-    let erros = [];
-
-    // CRIAÇÃO DAS CATEGORIAS E CANAIS
-    for (const [nomeCategoria, canais] of estrutura) {
-      try {
-        let categoria = message.guild.channels.cache.find(
-          canal =>
-            canal.type === ChannelType.GuildCategory &&
-            canal.name === nomeCategoria
-        );
-
-        if (!categoria) {
-          categoria = await message.guild.channels.create({
-            name: nomeCategoria,
-            type: ChannelType.GuildCategory
-          });
-
-          criados++;
-        }
-
-        for (const [tipo, nomeCanal] of canais) {
-          const existe = message.guild.channels.cache.find(
-            canal =>
-              canal.parentId === categoria.id &&
-              canal.name === nomeCanal
-          );
-
-          if (existe) {
-            existentes++;
-            continue;
-          }
-
-          await message.guild.channels.create({
-            name: nomeCanal,
-            type: tipo === "voice"
-              ? ChannelType.GuildVoice
-              : ChannelType.GuildText,
-            parent: categoria.id
-          });
-
-          criados++;
-
-          await new Promise(resolve =>
-            setTimeout(resolve, 500)
-          );
-        }
-
-      } catch (erro) {
-        console.log("Erro na categoria: " + nomeCategoria);
-        console.log(erro);
-        erros.push(nomeCategoria);
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      {
+        body: [comando.toJSON()]
       }
-    }
-
-    // RESULTADO FINAL
-    const final = new EmbedBuilder()
-      .setColor(erros.length > 0 ? "#FFA500" : "#57F287")
-      .setTitle("✅ CENTRAL DE GB SYSTEM")
-      .setDescription(
-        "**Criação da estrutura finalizada!**\n\n" +
-        "📁 **Criados:** " + criados + "\n" +
-        "📌 **Já existentes:** " + existentes + "\n\n" +
-        (
-          erros.length > 0
-            ? "⚠️ **Categorias com erro:**\n" + erros.join("\n")
-            : "🎉 Todos os canais foram processados com sucesso!"
-        )
-      )
-      .setFooter({
-        text: "GB SYSTEM • Sistema de organização"
-      })
-      .setTimestamp();
-
-    await status.edit({
-      embeds: [final]
-    });
-
-  } catch (erro) {
-    console.log("Erro geral ao criar estrutura:", erro);
-
-    await message.reply(
-      "❌ Ocorreu um erro ao criar a estrutura. Verifique os logs do Railway."
     );
 
-  } finally {
-    criandoServidores.delete(guildId);
+    console.log("Comando registrado com sucesso.");
+  } catch (erro) {
+    console.log("Erro ao registrar comando:");
+    console.log(erro);
   }
 });
 
-// CONECTAR BOT
+client.on("interactionCreate", async function (interaction) {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName !== "criar-estrutura") return;
+
+  if (!interaction.guild) return;
+
+  if (!interaction.memberPermissions.has(
+    PermissionFlagsBits.ManageChannels
+  )) {
+    await interaction.reply({
+      content: "Você precisa da permissão Gerenciar canais.",
+      ephemeral: true
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  let criados = 0;
+  let existentes = 0;
+  let erros = [];
+
+  for (const item of estrutura) {
+    const nomeCategoria = item[0];
+    const canais = item[1];
+
+    try {
+      let categoria = interaction.guild.channels.cache.find(
+        function (canal) {
+          return canal.type === ChannelType.GuildCategory &&
+            canal.name === nomeCategoria;
+        }
+      );
+
+      if (!categoria) {
+        categoria = await interaction.guild.channels.create({
+          name: nomeCategoria,
+          type: ChannelType.GuildCategory
+        });
+
+        criados++;
+      }
+
+      for (const canalInfo of canais) {
+        const tipo = canalInfo[0];
+        const nomeCanal = canalInfo[1];
+
+        const existe = interaction.guild.channels.cache.find(
+          function (canal) {
+            return canal.parentId === categoria.id &&
+              canal.name === nomeCanal;
+          }
+        );
+
+        if (existe) {
+          existentes++;
+          continue;
+        }
+
+        await interaction.guild.channels.create({
+          name: nomeCanal,
+          type: tipo === "voice"
+            ? ChannelType.GuildVoice
+            : ChannelType.GuildText,
+          parent: categoria.id
+        });
+
+        criados++;
+
+        await new Promise(function (resolve) {
+          setTimeout(resolve, 400);
+        });
+      }
+    } catch (erro) {
+      console.log("Erro na categoria: " + nomeCategoria);
+      console.log(erro);
+      erros.push(nomeCategoria);
+    }
+  }
+
+  let resposta =
+    "Finalizado! Criados: " + criados +
+    " | Já existentes: " + existentes;
+
+  if (erros.length > 0) {
+    resposta += "\nCategorias com erro: " + erros.join(", ");
+  }
+
+  await interaction.editReply(resposta);
+});
+
 client.login(TOKEN);
