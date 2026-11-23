@@ -129,7 +129,7 @@ const command = new SlashCommandBuilder()
   );
 
 client.once("ready", async () => {
-  console.log(`Bot conectado: $DIL0`);
+  console.log("Bot conectado");
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
 
