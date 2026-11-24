@@ -18,7 +18,7 @@ if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
 
 const estrutura = [
   ["Informações", [
-    ["text", "⚡ ・ rumo-150k"],
+    ["text", "⚡ ・ rumo-1k"],
     ["text", "📱 ・ redes-sociais"],
     ["text", "🎉 ・ 1-win-20-no-px"],
     ["text", "⚠️ ・ como-transmitir-tela"]
@@ -37,57 +37,57 @@ const estrutura = [
   ]],
 
   ["Partidas", [
-    ["text", "⚡ ・ pantera"]
+    ["text", "⚡・seu nome"]
   ]],
 
-  ["PANTERA 5", [
-    ["text", "💵 ・ pagar-2-00-208"]
+  ["fila exemplo 5", [
+    ["text", "💵・pagar-2-00-208"]
   ]],
 
   ["Mobile", [
-    ["text", "🟡 ・ diario"],
-    ["text", "📱 ・ 1x1-mobile"],
-    ["text", "📱 ・ 2x2-mobile"],
-    ["text", "📱 ・ 3x3-mobile"],
-    ["text", "📱 ・ 4x4-mobile"]
+    ["text", "🟡・nome canal"],
+    ["text", "📱・1x1-mobile"],
+    ["text", "📱・2x2-mobile"],
+    ["text", "📱・3x3-mobile"],
+    ["text", "📱・4x4-mobile"]
   ]],
 
   ["Full Capa", [
-    ["text", "💸 ・ pix-gratis"],
-    ["text", "▫️ ・ 1x1-full-capa"],
-    ["text", "▫️ ・ 2x2-full-capa"],
-    ["text", "▫️ ・ 3x3-full-capa"],
-    ["text", "▫️ ・ 4x4-full-capa"]
+    ["text", "💸・pix-gratis"],
+    ["text", "▫️・1x1-full-capa"],
+    ["text", "▫️・2x2-full-capa"],
+    ["text", "▫️・3x3-full-capa"],
+    ["text", "▫️・4x4-full-capa"]
   ]],
 
   ["Emulador", [
-    ["text", "💻 ・ 1x1-emu"],
-    ["text", "💻 ・ 2x2-emu"],
-    ["text", "💻 ・ 3x3-emu"],
-    ["text", "💻 ・ 4x4-emu"]
+    ["text", "💻・1x1-emu"],
+    ["text", "💻・2x2-emu"],
+    ["text", "💻・3x3-emu"],
+    ["text", "💻・4x4-emu"]
   ]],
 
   ["Misto", [
-    ["text", "📱💻 ・ 2x2-misto"],
-    ["text", "📱💻 ・ 3x3-misto"],
-    ["text", "📱💻 ・ 4x4-misto"]
+    ["text", "📱💻・2x2-misto"],
+    ["text", "📱💻・3x3-misto"],
+    ["text", "📱💻・4x4-misto"]
   ]],
 
   ["Comunidade", [
-    ["text", "📝 ・ vagas"],
-    ["text", "🛒 ・ lojinha"],
-    ["text", "⚡ ・ roleta"],
-    ["text", "☑️ ・ regras"],
-    ["text", "📒 ・ regras-x1"],
-    ["text", "📒 ・ regras-full-capa"],
-    ["text", "👑 ・ ranking"],
-    ["text", "🏆 ・ ranking-diario"],
-    ["text", "💸 ・ feedback-adm"]
+    ["text", "📝・vagas"],
+    ["text", "🛒・lojinha"],
+    ["text", "⚡・roleta"],
+    ["text", "☑️・regras"],
+    ["text", "📒・regras-x1"],
+    ["text", "📒・regras-full-capa"],
+    ["text", "👑・ranking"],
+    ["text", "🏆・ranking-diario"],
+    ["text", "💸・feedback-adm"]
   ]],
 
   ["Telagem", [
-    ["text", "🔍 ・ regras"],
-    ["text", "📁 ・ exposed"]
+    ["text", "🔍・regras"],
+    ["text", "📁・exposed"]
   ]],
 
   ["Convite", [
