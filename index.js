@@ -1,11 +1,10 @@
+
 const {
   Client,
   GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder,
   ChannelType,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  EmbedBuilder
 } = require("discord.js");
 
 const TOKEN = process.env.DISCORD_TOKEN;
@@ -145,126 +144,134 @@ const estrutura = [
 ];
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-const comando = new SlashCommandBuilder()
-  .setName("criar-estrutura")
-  .setDescription("Cria todas as categorias e canais")
-  .setDefaultMemberPermissions(
-    PermissionFlagsBits.ManageChannels
-  );
-
-client.once("ready", async function () {
+// COMANDO .CRIAR
+client.once("ready", function () {
   console.log("Bot conectado: " + client.user.tag);
-
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-
-  try {
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      {
-        body: [comando.toJSON()]
-      }
-    );
-
-    console.log("Comando registrado com sucesso.");
-  } catch (erro) {
-    console.log("Erro ao registrar comando:");
-    console.log(erro);
-  }
+  console.log("CENTRAL DE GB SYSTEM");
+  console.log("Comando: .criar");
 });
 
-client.on("interactionCreate", async function (interaction) {
-  if (!interaction.isChatInputCommand()) return;
+client.on("messageCreate", async function (message) {
+  if (message.author.bot) return;
+  if (!message.guild) return;
 
-  if (interaction.commandName !== "criar-estrutura") return;
+  if (message.content.trim().toLowerCase() !== ".criar") return;
 
-  if (!interaction.guild) return;
-
-  if (!interaction.memberPermissions.has(
+  if (!message.member.permissions.has(
     PermissionFlagsBits.ManageChannels
   )) {
-    await interaction.reply({
-      content: "Você precisa da permissão Gerenciar canais.",
-      ephemeral: true
+    await message.reply({
+      content: "Você precisa da permissão Gerenciar canais."
     });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await message.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor("#5865F2")
+        .setTitle("🚀 CENTRAL DE GB SYSTEM")
+        .setDescription(
+          "**Está começando a criar a estrutura do servidor!**\n\n" +
+          "⏳ Aguarde enquanto as categorias e canais são criados."
+        )
+        .setFooter({
+          text: "GB SYSTEM • Sistema de organização"
+        })
+    ]
+  }).then(async function (status) {
 
-  let criados = 0;
-  let existentes = 0;
-  let erros = [];
+    let criados = 0;
+    let existentes = 0;
+    let erros = [];
 
-  for (const item of estrutura) {
-    const nomeCategoria = item[0];
-    const canais = item[1];
+    for (const item of estrutura) {
+      const nomeCategoria = item[0];
+      const canais = item[1];
 
-    try {
-      let categoria = interaction.guild.channels.cache.find(
-        function (canal) {
-          return canal.type === ChannelType.GuildCategory &&
-            canal.name === nomeCategoria;
-        }
-      );
-
-      if (!categoria) {
-        categoria = await interaction.guild.channels.create({
-          name: nomeCategoria,
-          type: ChannelType.GuildCategory
-        });
-
-        criados++;
-      }
-
-      for (const canalInfo of canais) {
-        const tipo = canalInfo[0];
-        const nomeCanal = canalInfo[1];
-
-        const existe = interaction.guild.channels.cache.find(
+      try {
+        let categoria = message.guild.channels.cache.find(
           function (canal) {
-            return canal.parentId === categoria.id &&
-              canal.name === nomeCanal;
+            return canal.type === ChannelType.GuildCategory &&
+              canal.name === nomeCategoria;
           }
         );
 
-        if (existe) {
-          existentes++;
-          continue;
+        if (!categoria) {
+          categoria = await message.guild.channels.create({
+            name: nomeCategoria,
+            type: ChannelType.GuildCategory
+          });
+
+          criados++;
         }
 
-        await interaction.guild.channels.create({
-          name: nomeCanal,
-          type: tipo === "voice"
-            ? ChannelType.GuildVoice
-            : ChannelType.GuildText,
-          parent: categoria.id
-        });
+        for (const canalInfo of canais) {
+          const tipo = canalInfo[0];
+          const nomeCanal = canalInfo[1];
 
-        criados++;
+          const existe = message.guild.channels.cache.find(
+            function (canal) {
+              return canal.parentId === categoria.id &&
+                canal.name === nomeCanal;
+            }
+          );
 
-        await new Promise(function (resolve) {
-          setTimeout(resolve, 400);
-        });
+          if (existe) {
+            existentes++;
+            continue;
+          }
+
+          await message.guild.channels.create({
+            name: nomeCanal,
+            type: tipo === "voice"
+              ? ChannelType.GuildVoice
+              : ChannelType.GuildText,
+            parent: categoria.id
+          });
+
+          criados++;
+
+          await new Promise(function (resolve) {
+            setTimeout(resolve, 400);
+          });
+        }
+
+      } catch (erro) {
+        console.log("Erro na categoria: " + nomeCategoria);
+        console.log(erro);
+        erros.push(nomeCategoria);
       }
-    } catch (erro) {
-      console.log("Erro na categoria: " + nomeCategoria);
-      console.log(erro);
-      erros.push(nomeCategoria);
     }
-  }
 
-  let resposta =
-    "Finalizado! Criados: " + criados +
-    " | Já existentes: " + existentes;
+    let resposta =
+      "Finalizado! Criados: " + criados +
+      " | Já existentes: " + existentes;
 
-  if (erros.length > 0) {
-    resposta += "\nCategorias com erro: " + erros.join(", ");
-  }
+    if (erros.length > 0) {
+      resposta += "\nCategorias com erro: " + erros.join(", ");
+    }
 
-  await interaction.editReply(resposta);
+    await status.edit({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(erros.length > 0 ? "#FFA500" : "#57F287")
+          .setTitle("✅ CENTRAL DE GB SYSTEM")
+          .setDescription(resposta)
+          .setFooter({
+            text: "GB SYSTEM • Sistema de organização"
+          })
+          .setTimestamp()
+      ]
+    });
+  });
 });
 
 client.login(TOKEN);
