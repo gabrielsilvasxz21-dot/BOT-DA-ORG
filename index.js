@@ -20,15 +20,22 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, "data");
 const BOTS_FILE = path.join(DATA_DIR, "bots.json");
 
-const SITE_ORIGIN = "https://gabrielsilvasxz21-dot.github.io";
+const SITE_ORIGIN =
+  "https://gabrielsilvasxz21-dot.github.io";
 
 app.use(express.json({ limit: "10kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", SITE_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, DELETE, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type"
+  );
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
@@ -36,6 +43,10 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// ======================================================
+// ARQUIVO DE DADOS
+// ======================================================
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -47,15 +58,24 @@ if (!fs.existsSync(BOTS_FILE)) {
 
 function readBots() {
   try {
-    return JSON.parse(fs.readFileSync(BOTS_FILE, "utf8"));
+    return JSON.parse(
+      fs.readFileSync(BOTS_FILE, "utf8")
+    );
   } catch {
     return [];
   }
 }
 
 function saveBots(bots) {
-  fs.writeFileSync(BOTS_FILE, JSON.stringify(bots, null, 2));
+  fs.writeFileSync(
+    BOTS_FILE,
+    JSON.stringify(bots, null, 2)
+  );
 }
+
+// ======================================================
+// CLIENTES DOS BOTS
+// ======================================================
 
 const botClients = new Map();
 const servidoresCriando = new Set();
@@ -253,7 +273,11 @@ async function criarCargos(guild) {
 // PERMISSÕES DAS CATEGORIAS
 // ======================================================
 
-function permissoesCategoria(guild, nomeCategoria, cargosMap) {
+function permissoesCategoria(
+  guild,
+  nomeCategoria,
+  cargosMap
+) {
   const overwrites = [];
 
   const areasPrivadas = [
@@ -456,7 +480,7 @@ async function criarEstrutura(guild, cargosMap) {
 }
 
 // ======================================================
-// COMANDO .CRIAR - INTEGRADO AO BOT CADASTRADO NO SITE
+// COMANDO .CRIAR
 // ======================================================
 
 function configurarComandos(client) {
@@ -558,7 +582,7 @@ function configurarComandos(client) {
 }
 
 // ======================================================
-// INICIAR BOT PELO TOKEN RECEBIDO DO SITE
+// INICIAR BOT PELO TOKEN DO SITE
 // ======================================================
 
 async function startBot(botData) {
@@ -607,7 +631,7 @@ function stopBot(botId) {
 }
 
 // ======================================================
-// API DO SEU SITE
+// API - STATUS DO RAILWAY
 // ======================================================
 
 app.get("/api/health", (req, res) => {
@@ -617,21 +641,31 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Listar bots sem expor tokens
+// ======================================================
+// API - LISTAR BOTS
+// ======================================================
+
 app.get("/api/bots", (req, res) => {
   const bots = readBots();
 
   res.json(
-    bots.map(bot => ({
-      id: bot.id,
-      name: bot.name,
-      active: bot.active,
-      online: botClients.has(bot.id)
-    }))
+    bots.map(bot => {
+      const client = botClients.get(bot.id);
+
+      return {
+        id: bot.id,
+        name: bot.name || "Bot Discord",
+        active: bot.active !== false,
+        online: Boolean(client && client.isReady())
+      };
+    })
   );
 });
 
-// Cadastrar bot pelo token enviado pelo site
+// ======================================================
+// API - CADASTRAR BOT PELO SITE
+// ======================================================
+
 app.post("/api/bots", async (req, res) => {
   const token =
     typeof req.body.token === "string"
@@ -646,10 +680,8 @@ app.post("/api/bots", async (req, res) => {
 
   const bots = readBots();
 
-  const id = crypto.randomUUID();
-
   const botData = {
-    id,
+    id: crypto.randomUUID(),
     token,
     name: "Bot Discord",
     active: true
@@ -663,19 +695,19 @@ app.post("/api/bots", async (req, res) => {
     bots.push(botData);
     saveBots(bots);
 
-    return res.json({
+    return res.status(201).json({
       success: true,
       bot: {
         id: botData.id,
         name: botData.name,
         active: true,
-        online: true
+        online: client.isReady()
       }
     });
   } catch (erro) {
     console.error("Erro cadastrando bot:", erro);
 
-    stopBot(id);
+    stopBot(botData.id);
 
     return res.status(400).json({
       error: "Não foi possível conectar. Confira o token do bot."
@@ -683,7 +715,10 @@ app.post("/api/bots", async (req, res) => {
   }
 });
 
-// Ativar ou pausar bot
+// ======================================================
+// API - ATIVAR OU PAUSAR BOT
+// ======================================================
+
 app.patch("/api/bots/:id", async (req, res) => {
   const bots = readBots();
   const bot = bots.find(item => item.id === req.params.id);
@@ -694,25 +729,31 @@ app.patch("/api/bots/:id", async (req, res) => {
     });
   }
 
-  if (typeof req.body.active === "boolean") {
-    if (req.body.active) {
-      try {
-        await startBot(bot);
-        bot.active = true;
-      } catch (erro) {
-        console.error("Erro ativando bot:", erro);
+  if (typeof req.body.active !== "boolean") {
+    return res.status(400).json({
+      error: "Informe active como true ou false."
+    });
+  }
 
-        return res.status(400).json({
-          error: "Não foi possível ativar o bot."
-        });
-      }
-    } else {
-      bot.active = false;
-      stopBot(bot.id);
+  if (req.body.active) {
+    try {
+      await startBot(bot);
+      bot.active = true;
+    } catch (erro) {
+      console.error("Erro ativando bot:", erro);
+
+      return res.status(400).json({
+        error: "Não foi possível ativar o bot."
+      });
     }
+  } else {
+    bot.active = false;
+    stopBot(bot.id);
   }
 
   saveBots(bots);
+
+  const client = botClients.get(bot.id);
 
   return res.json({
     success: true,
@@ -720,12 +761,15 @@ app.patch("/api/bots/:id", async (req, res) => {
       id: bot.id,
       name: bot.name,
       active: bot.active,
-      online: botClients.has(bot.id)
+      online: Boolean(client && client.isReady())
     }
   });
 });
 
-// Excluir bot do painel
+// ======================================================
+// API - REMOVER BOT
+// ======================================================
+
 app.delete("/api/bots/:id", (req, res) => {
   const bots = readBots();
   const bot = bots.find(item => item.id === req.params.id);
@@ -748,14 +792,14 @@ app.delete("/api/bots/:id", (req, res) => {
 });
 
 // ======================================================
-// RESTAURAR BOTS CADASTRADOS QUANDO RAILWAY INICIAR
+// RESTAURAR BOTS ATIVOS AO REINICIAR O RAILWAY
 // ======================================================
 
 async function restaurarBots() {
   const bots = readBots();
 
   for (const bot of bots) {
-    if (!bot.active) continue;
+    if (bot.active === false) continue;
 
     try {
       await startBot(bot);
@@ -773,7 +817,9 @@ async function restaurarBots() {
 // ======================================================
 
 app.listen(PORT, async () => {
-  console.log("CENTRAL GB SYSTEM online na porta " + PORT);
+  console.log(
+    "CENTRAL GB SYSTEM online na porta " + PORT
+  );
 
   await restaurarBots();
 });
