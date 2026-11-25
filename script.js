@@ -1,12 +1,7 @@
 
 const API_URL = "https://COLOQUE-SEU-DOMINIO-DA-RAILWAY";
 
-const loginView = document.getElementById("loginView");
 const dashboardView = document.getElementById("dashboardView");
-
-const loginForm = document.getElementById("loginForm");
-const loginMessage = document.getElementById("loginMessage");
-const logoutButton = document.getElementById("logoutButton");
 const connectionStatus = document.getElementById("connectionStatus");
 
 const botsList = document.getElementById("botsList");
@@ -63,12 +58,6 @@ function showToast(message) {
   }, 3000);
 }
 
-function showDashboard() {
-  loginView.classList.add("hidden");
-  dashboardView.classList.remove("hidden");
-  logoutButton.classList.add("hidden");
-}
-
 async function loadBots() {
   try {
     bots = await api("/api/bots");
@@ -120,7 +109,8 @@ function renderBots() {
     id.textContent = "ID: " + bot.id;
 
     const status = document.createElement("span");
-    status.className = "bot-state " +
+    status.className =
+      "bot-state " +
       (bot.status === "active" ? "active" : "paused");
 
     status.textContent =
@@ -170,6 +160,7 @@ async function updateBot(id, status) {
     });
 
     showToast("Status atualizado!");
+
     await loadBots();
   } catch (error) {
     showToast(error.message);
@@ -187,6 +178,7 @@ async function deleteBot(id) {
     });
 
     showToast("Bot removido!");
+
     await loadBots();
   } catch (error) {
     showToast(error.message);
@@ -196,6 +188,7 @@ async function deleteBot(id) {
 openAddBot.addEventListener("click", () => {
   addBotMessage.textContent = "";
   botTokenInput.value = "";
+
   addBotDialog.showModal();
 });
 
@@ -249,7 +242,7 @@ addBotForm.addEventListener("submit", async event => {
 
 // INICIAR PAINEL SEM LOGIN
 async function initialize() {
-  showDashboard();
+  dashboardView.classList.remove("hidden");
 
   try {
     await api("/api/health");
