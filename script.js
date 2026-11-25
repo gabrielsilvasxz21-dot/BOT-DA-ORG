@@ -1,5 +1,5 @@
 
-const API_URL = "https://COLOQUE-SEU-DOMINIO-DA-RAILWAY";
+const API_URL = "https://bot-da-org-production.up.railway.app";
 
 const dashboardView = document.getElementById("dashboardView");
 const connectionStatus = document.getElementById("connectionStatus");
