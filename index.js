@@ -11,7 +11,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || "./data";
 
-// IMPORTANTE: troque pelo endereço real do seu GitHub Pages.
 const ALLOWED_ORIGIN =
   "https://gabrielsilvasxz21-dot.github.io";
 
