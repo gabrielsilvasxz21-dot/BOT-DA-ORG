@@ -110,9 +110,9 @@ const cargos = [
 
 const estrutura = [
   ["Informações", [
-    ["text", "⚡ ・ rumo-150k"],
+    ["text", "⚡ ・ rumo-1k"],
     ["text", "📱 ・ redes-sociais"],
-    ["text", "🎉 ・ 1-win-20-no-px"],
+    ["text", "🎉 ・ algum evento se quiser"],
     ["text", "⚠️ ・ como-transmitir-tela"]
   ]],
 
@@ -129,15 +129,15 @@ const estrutura = [
   ]],
 
   ["Partidas", [
-    ["text", "⚡ ・ pantera"]
+    ["text", "⚡ ・ nome da org"]
   ]],
 
-  ["PANTERA 5", [
+  ["exemplo fila 5", [
     ["text", "💵 ・ pagar-2-00-208"]
   ]],
 
   ["Mobile", [
-    ["text", "🟡 ・ diario"],
+    ["text", "🟡 ・ canal divul"],
     ["text", "📱 ・ 1x1-mobile"],
     ["text", "📱 ・ 2x2-mobile"],
     ["text", "📱 ・ 3x3-mobile"],
