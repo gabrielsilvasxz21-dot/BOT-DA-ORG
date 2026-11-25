@@ -1,11 +1,14 @@
 {
-  "name": "discord-channel-creator",
+  "name": "central-gb-system",
   "version": "1.0.0",
+  "description": "Painel de gerenciamento de bots Discord",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.19.3"
+    "discord.js": "^14.19.3",
+    "express": "^5.1.0",
+    "dotenv": "^16.4.7"
   }
 }
