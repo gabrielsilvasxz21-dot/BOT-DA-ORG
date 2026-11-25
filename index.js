@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -6,7 +7,6 @@ const {
   GatewayIntentBits
 } = require("discord.js");
 
-const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
@@ -17,20 +17,13 @@ app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY;
-const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY;
 const DATA_DIR = process.env.DATA_DIR || "./data";
 
-if (!ADMIN_KEY || !ENCRYPTION_KEY) {
-  console.error("Configure ADMIN_KEY e TOKEN_ENCRYPTION_KEY.");
+if (!ADMIN_KEY) {
+  console.error("Configure ADMIN_KEY no arquivo .env.");
   process.exit(1);
 }
 
-if (!/^[a-fA-F0-9]{64}$/.test(ENCRYPTION_KEY)) {
-  console.error("TOKEN_ENCRYPTION_KEY precisa ter 64 caracteres hexadecimais.");
-  process.exit(1);
-}
-
-const key = Buffer.from(ENCRYPTION_KEY, "hex");
 const databaseFile = path.join(DATA_DIR, "bots.json");
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -40,42 +33,16 @@ if (!fs.existsSync(databaseFile)) {
 }
 
 function readBots() {
-  return JSON.parse(fs.readFileSync(databaseFile, "utf8"));
+  try {
+    return JSON.parse(fs.readFileSync(databaseFile, "utf8"));
+  } catch (error) {
+    console.error("Erro ao ler bots.json:", error.message);
+    return [];
+  }
 }
 
 function saveBots(bots) {
   fs.writeFileSync(databaseFile, JSON.stringify(bots, null, 2));
-}
-
-function encryptToken(token) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-
-  const encrypted = Buffer.concat([
-    cipher.update(token, "utf8"),
-    cipher.final()
-  ]);
-
-  return {
-    iv: iv.toString("hex"),
-    data: encrypted.toString("hex"),
-    tag: cipher.getAuthTag().toString("hex")
-  };
-}
-
-function decryptToken(encrypted) {
-  const decipher = crypto.createDecipheriv(
-    "aes-256-gcm",
-    key,
-    Buffer.from(encrypted.iv, "hex")
-  );
-
-  decipher.setAuthTag(Buffer.from(encrypted.tag, "hex"));
-
-  return Buffer.concat([
-    decipher.update(Buffer.from(encrypted.data, "hex")),
-    decipher.final()
-  ]).toString("utf8");
 }
 
 function adminOnly(req, res, next) {
@@ -93,6 +60,10 @@ function adminOnly(req, res, next) {
 const botClients = new Map();
 
 async function startBot(botData) {
+  if (botClients.has(botData.id)) {
+    return;
+  }
+
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -126,17 +97,33 @@ async function startBot(botData) {
   });
 
   try {
-    await client.login(decryptToken(botData.token));
+    await client.login(botData.token);
 
     botClients.set(botData.id, client);
 
     console.log("Bot conectado:", client.user.username);
+
   } catch (error) {
-    console.error("Não foi possível conectar um bot cadastrado.");
+    console.error(
+      "Não foi possível conectar o bot:",
+      botData.username,
+      error.message
+    );
+
     client.destroy();
   }
 }
 
+function stopBot(botId) {
+  const client = botClients.get(botId);
+
+  if (client) {
+    client.destroy();
+    botClients.delete(botId);
+  }
+}
+
+// LISTAR BOTS
 app.get("/api/bots", adminOnly, (req, res) => {
   const bots = readBots();
 
@@ -150,6 +137,7 @@ app.get("/api/bots", adminOnly, (req, res) => {
   );
 });
 
+// CADASTRAR BOT
 app.post("/api/bots", adminOnly, async (req, res) => {
   const token = req.body.token;
 
@@ -183,7 +171,7 @@ app.post("/api/bots", adminOnly, async (req, res) => {
       id: botId,
       username,
       status: "active",
-      token: encryptToken(token.trim()),
+      token: token.trim(),
       createdAt: new Date().toISOString()
     };
 
@@ -200,8 +188,11 @@ app.post("/api/bots", adminOnly, async (req, res) => {
         status: "active"
       }
     });
+
   } catch (error) {
     client.destroy();
+
+    console.error("Erro ao cadastrar bot:", error.message);
 
     res.status(400).json({
       error: "Token inválido ou bot não conseguiu conectar."
@@ -209,7 +200,8 @@ app.post("/api/bots", adminOnly, async (req, res) => {
   }
 });
 
-app.patch("/api/bots/:id", adminOnly, (req, res) => {
+// ATIVAR OU PAUSAR BOT
+app.patch("/api/bots/:id", adminOnly, async (req, res) => {
   const { status } = req.body;
 
   if (!["active", "paused"].includes(status)) {
@@ -219,6 +211,7 @@ app.patch("/api/bots/:id", adminOnly, (req, res) => {
   }
 
   const bots = readBots();
+
   const bot = bots.find(item => item.id === req.params.id);
 
   if (!bot) {
@@ -228,7 +221,14 @@ app.patch("/api/bots/:id", adminOnly, (req, res) => {
   }
 
   bot.status = status;
+
   saveBots(bots);
+
+  if (status === "paused") {
+    stopBot(bot.id);
+  } else {
+    await startBot(bot);
+  }
 
   res.json({
     message: "Status atualizado.",
@@ -236,8 +236,10 @@ app.patch("/api/bots/:id", adminOnly, (req, res) => {
   });
 });
 
+// REMOVER BOT
 app.delete("/api/bots/:id", adminOnly, (req, res) => {
   const bots = readBots();
+
   const bot = bots.find(item => item.id === req.params.id);
 
   if (!bot) {
@@ -246,29 +248,33 @@ app.delete("/api/bots/:id", adminOnly, (req, res) => {
     });
   }
 
-  const client = botClients.get(bot.id);
+  stopBot(bot.id);
 
-  if (client) {
-    client.destroy();
-    botClients.delete(bot.id);
-  }
-
-  saveBots(bots.filter(item => item.id !== bot.id));
+  saveBots(
+    bots.filter(item => item.id !== bot.id)
+  );
 
   res.json({
     message: "Bot removido da CENTRAL DE GB SYSTEM."
   });
 });
 
+// RESTAURAR BOTS AO INICIAR
 async function restoreBots() {
-  for (const bot of readBots()) {
+  const bots = readBots();
+
+  for (const bot of bots) {
     if (bot.status === "active") {
       await startBot(bot);
     }
   }
 }
 
+// INICIAR SERVIDOR
 app.listen(PORT, async () => {
-  console.log("CENTRAL DE GB SYSTEM online na porta " + PORT);
+  console.log(
+    "CENTRAL DE GB SYSTEM online na porta " + PORT
+  );
+
   await restoreBots();
 });
