@@ -1,11 +1,11 @@
 
+const API_URL = "https://COLOQUE-SEU-DOMINIO-DA-RAILWAY";
+
 const loginView = document.getElementById("loginView");
 const dashboardView = document.getElementById("dashboardView");
 
 const loginForm = document.getElementById("loginForm");
-const adminKeyInput = document.getElementById("adminKey");
 const loginMessage = document.getElementById("loginMessage");
-
 const logoutButton = document.getElementById("logoutButton");
 const connectionStatus = document.getElementById("connectionStatus");
 
@@ -26,25 +26,32 @@ const cancelAddBot = document.getElementById("cancelAddBot");
 
 const toast = document.getElementById("toast");
 
-let adminKey = sessionStorage.getItem("gb_admin_key") || "";
 let bots = [];
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
+  const response = await fetch(`${API_URL}${url}`, {
     ...options,
     headers: {
-      ...(options.headers || {}),
-      "x-admin-key": adminKey
+      ...(options.headers || {})
     }
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.error || "Erro na comunicação com o servidor.");
+    throw new Error(
+      data.error || "Erro na comunicação com o servidor."
+    );
   }
 
   return data;
+}
+
+function setConnection(online) {
+  connectionStatus.textContent = online ? "Online" : "Offline";
+
+  connectionStatus.classList.toggle("status-online", online);
+  connectionStatus.classList.toggle("status-offline", !online);
 }
 
 function showToast(message) {
@@ -56,115 +63,32 @@ function showToast(message) {
   }, 3000);
 }
 
-function setConnection(online) {
-  connectionStatus.textContent = online ? "Online" : "Offline";
-
-  connectionStatus.classList.toggle("status-online", online);
-  connectionStatus.classList.toggle("status-offline", !online);
-}
-
-function showLogin() {
-  loginView.classList.remove("hidden");
-  dashboardView.classList.add("hidden");
-  logoutButton.classList.add("hidden");
-  setConnection(false);
-}
-
 function showDashboard() {
   loginView.classList.add("hidden");
   dashboardView.classList.remove("hidden");
-  logoutButton.classList.remove("hidden");
-  setConnection(true);
+  logoutButton.classList.add("hidden");
 }
-
-async function login(key) {
-  try {
-    adminKey = key;
-
-    await api("/api/bots");
-
-    sessionStorage.setItem("gb_admin_key", key);
-
-    loginMessage.textContent = "";
-
-    showDashboard();
-
-    await loadBots();
-
-    return true;
-
-  } catch (error) {
-    adminKey = "";
-
-    loginMessage.textContent =
-      "Senha incorreta ou erro de conexão com o servidor.";
-
-    setConnection(false);
-
-    return false;
-  }
-}
-
-loginForm.addEventListener("submit", async event => {
-  event.preventDefault();
-
-  const key = adminKeyInput.value.trim();
-
-  if (!key) {
-    loginMessage.textContent = "Digite sua chave administrativa.";
-    return;
-  }
-
-  const button = loginForm.querySelector('button[type="submit"]');
-
-  button.disabled = true;
-  button.textContent = "Verificando...";
-
-  await login(key);
-
-  button.disabled = false;
-  button.textContent = "Entrar no painel";
-
-  if (!adminKey) {
-    adminKeyInput.value = "";
-  }
-});
-
-logoutButton.addEventListener("click", () => {
-  sessionStorage.removeItem("gb_admin_key");
-
-  adminKey = "";
-  bots = [];
-
-  showLogin();
-
-  adminKeyInput.value = "";
-
-  showToast("Você saiu do painel.");
-});
 
 async function loadBots() {
   try {
     bots = await api("/api/bots");
 
     renderBots();
-
     setConnection(true);
-
   } catch (error) {
+    setConnection(false);
     showToast(error.message);
-
-    if (error.message.includes("Acesso administrativo")) {
-      sessionStorage.removeItem("gb_admin_key");
-      adminKey = "";
-      showLogin();
-    }
   }
 }
 
 function renderBots() {
-  const active = bots.filter(bot => bot.status === "active").length;
-  const paused = bots.filter(bot => bot.status === "paused").length;
+  const active = bots.filter(
+    bot => bot.status === "active"
+  ).length;
+
+  const paused = bots.filter(
+    bot => bot.status === "paused"
+  ).length;
 
   activeCount.textContent = active;
   pausedCount.textContent = paused;
@@ -183,7 +107,6 @@ function renderBots() {
 
   bots.forEach(bot => {
     const card = document.createElement("article");
-
     card.className = "bot-card";
 
     const info = document.createElement("div");
@@ -193,11 +116,12 @@ function renderBots() {
     name.textContent = bot.username;
 
     const id = document.createElement("p");
+    id.className = "bot-id";
     id.textContent = "ID: " + bot.id;
 
     const status = document.createElement("span");
-    status.className = "status-pill " +
-      (bot.status === "active" ? "status-online" : "status-offline");
+    status.className = "bot-state " +
+      (bot.status === "active" ? "active" : "paused");
 
     status.textContent =
       bot.status === "active" ? "Ativo" : "Pausado";
@@ -209,17 +133,19 @@ function renderBots() {
 
     const toggleButton = document.createElement("button");
     toggleButton.className = "button button-secondary";
+
     toggleButton.textContent =
       bot.status === "active" ? "Pausar" : "Ativar";
 
     toggleButton.addEventListener("click", () => {
-      updateBot(bot.id,
+      updateBot(
+        bot.id,
         bot.status === "active" ? "paused" : "active"
       );
     });
 
     const deleteButton = document.createElement("button");
-    deleteButton.className = "button button-danger";
+    deleteButton.className = "button button-secondary";
     deleteButton.textContent = "Remover";
 
     deleteButton.addEventListener("click", () => {
@@ -227,7 +153,6 @@ function renderBots() {
     });
 
     actions.append(toggleButton, deleteButton);
-
     card.append(info, actions);
 
     botsList.appendChild(card);
@@ -245,30 +170,24 @@ async function updateBot(id, status) {
     });
 
     showToast("Status atualizado!");
-
     await loadBots();
-
   } catch (error) {
     showToast(error.message);
   }
 }
 
 async function deleteBot(id) {
-  const confirmed = confirm(
-    "Tem certeza que deseja remover este bot?"
-  );
-
-  if (!confirmed) return;
+  if (!confirm("Tem certeza que deseja remover este bot?")) {
+    return;
+  }
 
   try {
     await api(`/api/bots/${encodeURIComponent(id)}`, {
       method: "DELETE"
     });
 
-    showToast("Bot removido com sucesso!");
-
+    showToast("Bot removido!");
     await loadBots();
-
   } catch (error) {
     showToast(error.message);
   }
@@ -298,7 +217,9 @@ addBotForm.addEventListener("submit", async event => {
     return;
   }
 
-  const button = addBotForm.querySelector('button[type="submit"]');
+  const button = addBotForm.querySelector(
+    'button[type="submit"]'
+  );
 
   button.disabled = true;
   button.textContent = "Cadastrando...";
@@ -313,33 +234,38 @@ addBotForm.addEventListener("submit", async event => {
     });
 
     addBotDialog.close();
-
     botTokenInput.value = "";
 
     showToast("Bot cadastrado com sucesso!");
 
     await loadBots();
-
   } catch (error) {
     addBotMessage.textContent = error.message;
-
   } finally {
     button.disabled = false;
     button.textContent = "Cadastrar bot";
   }
 });
 
-// Verifica se já existe uma sessão administrativa.
+// INICIAR PAINEL SEM LOGIN
 async function initialize() {
-  if (adminKey) {
-    const success = await login(adminKey);
+  showDashboard();
 
-    if (success) return;
+  try {
+    await api("/api/health");
+    await loadBots();
+  } catch (error) {
+    setConnection(false);
 
-    sessionStorage.removeItem("gb_admin_key");
+    botsList.innerHTML = `
+      <div class="empty-state">
+        Não foi possível conectar ao servidor.
+        Confira o endereço da Railway no script.js.
+      </div>
+    `;
+
+    showToast(error.message);
   }
-
-  showLogin();
 }
 
 initialize();
