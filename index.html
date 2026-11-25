@@ -6,50 +6,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#101014">
   <title>GB SYSTEM | Painel administrativo</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div class="app-shell">
+
     <header class="topbar">
       <div class="brand">
         <div class="brand-logo">GB</div>
+
         <div>
           <h1>GB SYSTEM</h1>
           <p>Painel administrativo</p>
         </div>
       </div>
+
       <div class="header-actions">
-        <span id="connectionStatus" class="status-pill status-offline">Offline</span>
-        <button id="logoutButton" class="button button-quiet hidden" type="button">Sair</button>
+        <span id="connectionStatus" class="status-pill status-offline">
+          Offline
+        </span>
       </div>
     </header>
 
     <main>
-      <section id="loginView" class="login-wrap">
-        <form id="loginForm" class="login-card">
-          <div class="login-symbol">GB</div>
-          <h2>Acesso administrativo</h2>
-          <p>Entre com sua chave administrativa para gerenciar os bots.</p>
-          <label for="adminKey">Chave administrativa</label>
-          <input id="adminKey" type="password" placeholder="Digite sua chave" required>
-          <button class="button button-primary full-width" type="submit">Entrar no painel</button>
-          <p id="loginMessage" class="form-message"></p>
-        </form>
-      </section>
+      <section id="dashboardView">
 
-      <section id="dashboardView" class="hidden">
         <div class="stats-grid">
           <article class="stat-card">
             <span>Bots ativos</span>
             <strong id="activeCount">0</strong>
           </article>
+
           <article class="stat-card">
             <span>Pausados</span>
             <strong id="pausedCount">0</strong>
           </article>
+
           <article class="stat-card">
             <span>Cadastrados</span>
             <strong id="totalCount">0</strong>
@@ -61,42 +60,88 @@
             <h2>Bots cadastrados</h2>
             <p>Gerencie as conexões dos seus bots Discord.</p>
           </div>
-          <button id="openAddBot" class="button button-primary" type="button">＋ Adicionar bot</button>
+
+          <button
+            id="openAddBot"
+            class="button button-primary"
+            type="button"
+          >
+            ＋ Adicionar bot
+          </button>
         </div>
 
         <div id="botsList" class="bots-list">
-          <div class="empty-state">Carregando bots...</div>
+          <div class="empty-state">
+            Carregando bots...
+          </div>
         </div>
 
-        <p class="footer-note">GB SYSTEM · Painel de gerenciamento</p>
+        <p class="footer-note">
+          GB SYSTEM · Painel de gerenciamento
+        </p>
+
       </section>
     </main>
   </div>
 
   <dialog id="addBotDialog" class="modal">
     <form id="addBotForm" class="modal-card">
+
       <div class="modal-heading">
         <div>
           <h2>Adicionar bot</h2>
-          <p>O token será enviado ao servidor e armazenado criptografado.</p>
+          <p>
+            O token será enviado ao servidor e armazenado.
+          </p>
         </div>
-        <button class="icon-button" id="closeAddBot" type="button">×</button>
+
+        <button
+          class="icon-button"
+          id="closeAddBot"
+          type="button"
+        >
+          ×
+        </button>
       </div>
 
       <label for="botToken">Token do bot</label>
-      <input id="botToken" type="password" autocomplete="off" placeholder="Cole o token do bot" required>
 
-      <p class="security-note">Nunca compartilhe o token e não o coloque no GitHub.</p>
+      <input
+        id="botToken"
+        type="password"
+        autocomplete="off"
+        placeholder="Cole o token do bot"
+        required
+      >
+
+      <p class="security-note">
+        Nunca compartilhe o token e não o coloque no GitHub.
+      </p>
+
       <p id="addBotMessage" class="form-message"></p>
 
       <div class="modal-actions">
-        <button class="button button-secondary" id="cancelAddBot" type="button">Cancelar</button>
-        <button class="button button-primary" type="submit">Cadastrar bot</button>
+        <button
+          class="button button-secondary"
+          id="cancelAddBot"
+          type="button"
+        >
+          Cancelar
+        </button>
+
+        <button
+          class="button button-primary"
+          type="submit"
+        >
+          Cadastrar bot
+        </button>
       </div>
+
     </form>
   </dialog>
 
   <div id="toast" class="toast"></div>
+
   <script src="script.js"></script>
 </body>
 </html>
