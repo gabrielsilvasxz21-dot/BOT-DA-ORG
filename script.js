@@ -1,223 +1,322 @@
 
-const API = "/api";
-const $ = (selector) => document.querySelector(selector);
+const loginView = document.getElementById("loginView");
+const dashboardView = document.getElementById("dashboardView");
 
-const loginView = $("#loginView");
-const dashboardView = $("#dashboardView");
-const loginForm = $("#loginForm");
-const loginMessage = $("#loginMessage");
-const connectionStatus = $("#connectionStatus");
-const logoutButton = $("#logoutButton");
-const botsList = $("#botsList");
-const addBotDialog = $("#addBotDialog");
-const addBotForm = $("#addBotForm");
-const addBotMessage = $("#addBotMessage");
+const loginForm = document.getElementById("loginForm");
+const adminKeyInput = document.getElementById("adminKey");
+const loginMessage = document.getElementById("loginMessage");
+
+const logoutButton = document.getElementById("logoutButton");
+const connectionStatus = document.getElementById("connectionStatus");
+
+const botsList = document.getElementById("botsList");
+
+const activeCount = document.getElementById("activeCount");
+const pausedCount = document.getElementById("pausedCount");
+const totalCount = document.getElementById("totalCount");
+
+const addBotDialog = document.getElementById("addBotDialog");
+const addBotForm = document.getElementById("addBotForm");
+const botTokenInput = document.getElementById("botToken");
+const addBotMessage = document.getElementById("addBotMessage");
+
+const openAddBot = document.getElementById("openAddBot");
+const closeAddBot = document.getElementById("closeAddBot");
+const cancelAddBot = document.getElementById("cancelAddBot");
+
+const toast = document.getElementById("toast");
 
 let adminKey = sessionStorage.getItem("gb_admin_key") || "";
+let bots = [];
 
-function setConnection(online) {
-  connectionStatus.textContent = online ? "Online" : "Offline";
-  connectionStatus.className = `status-pill ${
-    online ? "status-online" : "status-offline"
-  }`;
-}
-
-function showDashboard(show) {
-  loginView.classList.toggle("hidden", show);
-  dashboardView.classList.toggle("hidden", !show);
-  logoutButton.classList.toggle("hidden", !show);
-}
-
-async function apiFetch(path, options = {}) {
-  const response = await fetch(`${API}${path}`, {
+async function api(url, options = {}) {
+  const response = await fetch(url, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": adminKey,
-      ...(options.headers || {})
+      ...(options.headers || {}),
+      "x-admin-key": adminKey
     }
   });
 
   const data = await response.json().catch(() => ({}));
 
-  if (response.status === 401) {
-    logout();
-    throw new Error(data.error || "Chave administrativa inválida.");
-  }
-
   if (!response.ok) {
-    throw new Error(data.error || "Não foi possível concluir a operação.");
+    throw new Error(data.error || "Erro na comunicação com o servidor.");
   }
 
   return data;
 }
 
-function toast(message) {
-  const el = $("#toast");
-  el.textContent = message;
-  el.classList.add("show");
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("show");
 
-  window.setTimeout(() => {
-    el.classList.remove("show");
-  }, 2800);
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 3000);
 }
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  })[char]);
+function setConnection(online) {
+  connectionStatus.textContent = online ? "Online" : "Offline";
+
+  connectionStatus.classList.toggle("status-online", online);
+  connectionStatus.classList.toggle("status-offline", !online);
 }
 
-async function loadBots() {
-  try {
-    const bots = await apiFetch("/bots");
-
-    setConnection(true);
-
-    const active = bots.filter(bot => bot.status === "active").length;
-    const paused = bots.filter(bot => bot.status === "paused").length;
-
-    $("#activeCount").textContent = active;
-    $("#pausedCount").textContent = paused;
-    $("#totalCount").textContent = bots.length;
-
-    if (!bots.length) {
-      botsList.innerHTML = `
-        <div class="empty-state">
-          Nenhum bot cadastrado ainda.
-          Clique em “Adicionar bot” para começar.
-        </div>
-      `;
-      return;
-    }
-
-    botsList.innerHTML = bots.map(bot => {
-      const isActive = bot.status === "active";
-
-      return `
-        <article class="bot-card">
-          <div class="bot-info">
-            <h3>${escapeHtml(bot.username || "Bot sem nome")}</h3>
-
-            <p class="bot-id">
-              ID: ${escapeHtml(bot.id)}
-            </p>
-
-            <span class="bot-state ${isActive ? "active" : "paused"}">
-              ${isActive ? "Ativo" : "Pausado"}
-            </span>
-          </div>
-
-          <div class="bot-actions">
-            <button
-              class="icon-button"
-              type="button"
-              title="${isActive ? "Pausar" : "Ativar"}"
-              aria-label="${isActive ? "Pausar" : "Ativar"}"
-              data-action="toggle"
-              data-id="${escapeHtml(bot.id)}"
-            >
-              ${isActive ? "Ⅱ" : "▶"}
-            </button>
-
-            <button
-              class="icon-button danger"
-              type="button"
-              title="Excluir"
-              aria-label="Excluir"
-              data-action="delete"
-              data-id="${escapeHtml(bot.id)}"
-            >
-              🗑
-            </button>
-          </div>
-        </article>
-      `;
-    }).join("");
-
-  } catch (error) {
-    setConnection(false);
-
-    botsList.innerHTML = `
-      <div class="empty-state">
-        ${escapeHtml(error.message)}
-      </div>
-    `;
-
-    throw error;
-  }
-}
-
-function logout() {
-  adminKey = "";
-  sessionStorage.removeItem("gb_admin_key");
-
-  showDashboard(false);
+function showLogin() {
+  loginView.classList.remove("hidden");
+  dashboardView.classList.add("hidden");
+  logoutButton.classList.add("hidden");
   setConnection(false);
 }
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
+function showDashboard() {
+  loginView.classList.add("hidden");
+  dashboardView.classList.remove("hidden");
+  logoutButton.classList.remove("hidden");
+  setConnection(true);
+}
 
-  adminKey = $("#adminKey").value.trim();
-  loginMessage.textContent = "Verificando acesso...";
-
+async function login(key) {
   try {
-    await loadBots();
+    adminKey = key;
 
-    sessionStorage.setItem("gb_admin_key", adminKey);
+    await api("/api/bots");
+
+    sessionStorage.setItem("gb_admin_key", key);
 
     loginMessage.textContent = "";
-    showDashboard(true);
+
+    showDashboard();
+
+    await loadBots();
+
+    return true;
 
   } catch (error) {
     adminKey = "";
-    loginMessage.textContent = error.message;
+
+    loginMessage.textContent =
+      "Senha incorreta ou erro de conexão com o servidor.";
+
+    setConnection(false);
+
+    return false;
+  }
+}
+
+loginForm.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const key = adminKeyInput.value.trim();
+
+  if (!key) {
+    loginMessage.textContent = "Digite sua chave administrativa.";
+    return;
+  }
+
+  const button = loginForm.querySelector('button[type="submit"]');
+
+  button.disabled = true;
+  button.textContent = "Verificando...";
+
+  await login(key);
+
+  button.disabled = false;
+  button.textContent = "Entrar no painel";
+
+  if (!adminKey) {
+    adminKeyInput.value = "";
   }
 });
 
-logoutButton.addEventListener("click", logout);
+logoutButton.addEventListener("click", () => {
+  sessionStorage.removeItem("gb_admin_key");
 
-$("#openAddBot").addEventListener("click", () => {
+  adminKey = "";
+  bots = [];
+
+  showLogin();
+
+  adminKeyInput.value = "";
+
+  showToast("Você saiu do painel.");
+});
+
+async function loadBots() {
+  try {
+    bots = await api("/api/bots");
+
+    renderBots();
+
+    setConnection(true);
+
+  } catch (error) {
+    showToast(error.message);
+
+    if (error.message.includes("Acesso administrativo")) {
+      sessionStorage.removeItem("gb_admin_key");
+      adminKey = "";
+      showLogin();
+    }
+  }
+}
+
+function renderBots() {
+  const active = bots.filter(bot => bot.status === "active").length;
+  const paused = bots.filter(bot => bot.status === "paused").length;
+
+  activeCount.textContent = active;
+  pausedCount.textContent = paused;
+  totalCount.textContent = bots.length;
+
+  if (bots.length === 0) {
+    botsList.innerHTML = `
+      <div class="empty-state">
+        Nenhum bot cadastrado ainda.
+      </div>
+    `;
+    return;
+  }
+
+  botsList.innerHTML = "";
+
+  bots.forEach(bot => {
+    const card = document.createElement("article");
+
+    card.className = "bot-card";
+
+    const info = document.createElement("div");
+    info.className = "bot-info";
+
+    const name = document.createElement("h3");
+    name.textContent = bot.username;
+
+    const id = document.createElement("p");
+    id.textContent = "ID: " + bot.id;
+
+    const status = document.createElement("span");
+    status.className = "status-pill " +
+      (bot.status === "active" ? "status-online" : "status-offline");
+
+    status.textContent =
+      bot.status === "active" ? "Ativo" : "Pausado";
+
+    info.append(name, id, status);
+
+    const actions = document.createElement("div");
+    actions.className = "bot-actions";
+
+    const toggleButton = document.createElement("button");
+    toggleButton.className = "button button-secondary";
+    toggleButton.textContent =
+      bot.status === "active" ? "Pausar" : "Ativar";
+
+    toggleButton.addEventListener("click", () => {
+      updateBot(bot.id,
+        bot.status === "active" ? "paused" : "active"
+      );
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "button button-danger";
+    deleteButton.textContent = "Remover";
+
+    deleteButton.addEventListener("click", () => {
+      deleteBot(bot.id);
+    });
+
+    actions.append(toggleButton, deleteButton);
+
+    card.append(info, actions);
+
+    botsList.appendChild(card);
+  });
+}
+
+async function updateBot(id, status) {
+  try {
+    await api(`/api/bots/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ status })
+    });
+
+    showToast("Status atualizado!");
+
+    await loadBots();
+
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function deleteBot(id) {
+  const confirmed = confirm(
+    "Tem certeza que deseja remover este bot?"
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await api(`/api/bots/${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    });
+
+    showToast("Bot removido com sucesso!");
+
+    await loadBots();
+
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+openAddBot.addEventListener("click", () => {
   addBotMessage.textContent = "";
-  $("#botToken").value = "";
+  botTokenInput.value = "";
   addBotDialog.showModal();
 });
 
-$("#closeAddBot").addEventListener("click", () => {
+closeAddBot.addEventListener("click", () => {
   addBotDialog.close();
 });
 
-$("#cancelAddBot").addEventListener("click", () => {
+cancelAddBot.addEventListener("click", () => {
   addBotDialog.close();
 });
 
-addBotForm.addEventListener("submit", async (event) => {
+addBotForm.addEventListener("submit", async event => {
   event.preventDefault();
 
-  const token = $("#botToken").value.trim();
+  const token = botTokenInput.value.trim();
 
-  const submit = addBotForm.querySelector(
-    'button[type="submit"]'
-  );
+  if (!token) {
+    addBotMessage.textContent = "Informe o token do bot.";
+    return;
+  }
 
-  submit.disabled = true;
-  submit.textContent = "Cadastrando...";
-  addBotMessage.textContent = "";
+  const button = addBotForm.querySelector('button[type="submit"]');
+
+  button.disabled = true;
+  button.textContent = "Cadastrando...";
 
   try {
-    await apiFetch("/bots", {
+    await api("/api/bots", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({ token })
     });
 
     addBotDialog.close();
 
-    toast("Bot cadastrado com sucesso!");
+    botTokenInput.value = "";
+
+    showToast("Bot cadastrado com sucesso!");
 
     await loadBots();
 
@@ -225,69 +324,22 @@ addBotForm.addEventListener("submit", async (event) => {
     addBotMessage.textContent = error.message;
 
   } finally {
-    submit.disabled = false;
-    submit.textContent = "Cadastrar bot";
+    button.disabled = false;
+    button.textContent = "Cadastrar bot";
   }
 });
 
-botsList.addEventListener("click", async (event) => {
-  const button = event.target.closest("button[data-action]");
+// Verifica se já existe uma sessão administrativa.
+async function initialize() {
+  if (adminKey) {
+    const success = await login(adminKey);
 
-  if (!button) return;
+    if (success) return;
 
-  const { action, id } = button.dataset;
-
-  try {
-    if (action === "toggle") {
-      const card = button.closest(".bot-card");
-
-      const currentlyActive = card
-        .querySelector(".bot-state")
-        .classList.contains("active");
-
-      await apiFetch(`/bots/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: currentlyActive ? "paused" : "active"
-        })
-      });
-
-      toast(
-        currentlyActive ? "Bot pausado." : "Bot ativado."
-      );
-
-    } else if (action === "delete") {
-      if (!window.confirm(
-        "Tem certeza que deseja excluir este bot?"
-      )) {
-        return;
-      }
-
-      await apiFetch(
-        `/bots/${encodeURIComponent(id)}`,
-        { method: "DELETE" }
-      );
-
-      toast("Bot removido.");
-    }
-
-    await loadBots();
-
-  } catch (error) {
-    toast(error.message);
+    sessionStorage.removeItem("gb_admin_key");
   }
-});
 
-async function restoreSession() {
-  if (!adminKey) return;
-
-  try {
-    await loadBots();
-    showDashboard(true);
-
-  } catch {
-    logout();
-  }
+  showLogin();
 }
 
-restoreSession();
+initialize();
