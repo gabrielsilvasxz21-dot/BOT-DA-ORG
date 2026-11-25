@@ -1,98 +1,28 @@
 
 require("dotenv").config();
 
-const express = require("express");
 const {
   Client,
   GatewayIntentBits,
   ChannelType,
   PermissionFlagsBits,
-  OverwriteType
+  EmbedBuilder
 } = require("discord.js");
 
-const fs = require("fs");
-const path = require("path");
+const TOKEN = process.env.DISCORD_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
 
-const app = express();
-
-const PORT = process.env.PORT || 3000;
-const DATA_DIR = process.env.DATA_DIR || "./data";
-
-const ALLOWED_ORIGIN =
-  "https://gabrielsilvasxz21-dot.github.io";
-
-// ======================================================
-// CORS
-// ======================================================
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  if (origin === ALLOWED_ORIGIN) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-  }
-
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type"
-  );
-
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PATCH, DELETE, OPTIONS"
-  );
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
-
-app.use(express.json({ limit: "10kb" }));
-
-// ======================================================
-// BANCO DE DADOS
-// ======================================================
-
-const databaseFile = path.join(DATA_DIR, "bots.json");
-
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-if (!fs.existsSync(databaseFile)) {
-  fs.writeFileSync(databaseFile, "[]");
-}
-
-function readBots() {
-  try {
-    const bots = JSON.parse(
-      fs.readFileSync(databaseFile, "utf8")
-    );
-
-    return Array.isArray(bots) ? bots : [];
-  } catch (error) {
-    console.error("Erro ao ler banco:", error.message);
-    return [];
-  }
-}
-
-function saveBots(bots) {
-  const tempFile = databaseFile + ".tmp";
-
-  fs.writeFileSync(
-    tempFile,
-    JSON.stringify(bots, null, 2)
-  );
-
-  fs.renameSync(tempFile, databaseFile);
+if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
+  console.log("Configure as variáveis do Railway.");
+  process.exit(1);
 }
 
 // ======================================================
-// CONFIGURAÇÃO DA ESTRUTURA
+// CARGOS
 // ======================================================
 
-const ROLE_NAMES = [
+const cargos = [
   "Dono",
   "Founder",
   "Ceo",
@@ -110,291 +40,219 @@ const ROLE_NAMES = [
   "/posse"
 ];
 
-// Cargos que terão administração completa.
-// Ajuste a lista caso queira limitar algum cargo.
-const ADMIN_ROLES = [
-  "Dono",
-  "Founder",
-  "Ceo"
+// ======================================================
+// ESTRUTURA ORIGINAL DOS CANAIS
+// ======================================================
+
+const estrutura = [
+  ["Informações", [
+    ["text", "⚡ ・ rumo-150k"],
+    ["text", "📱 ・ redes-sociais"],
+    ["text", "🎉 ・ 1-win-20-no-px"],
+    ["text", "⚠️ ・ como-transmitir-tela"]
+  ]],
+
+  ["Atendimento", [
+    ["text", "📬 ・ ticket"]
+  ]],
+
+  ["Tickets", [
+    ["text", "📘 ・ suporte"],
+    ["text", "📘 ・ reembolso"],
+    ["text", "📘 ・ receber-evento"],
+    ["text", "📘 ・ vagas"],
+    ["text", "📘 ・ divulgação"]
+  ]],
+
+  ["Partidas", [
+    ["text", "⚡ ・ pantera"]
+  ]],
+
+  ["PANTERA 5", [
+    ["text", "💵 ・ pagar-2-00-208"]
+  ]],
+
+  ["Mobile", [
+    ["text", "🟡 ・ diario"],
+    ["text", "📱 ・ 1x1-mobile"],
+    ["text", "📱 ・ 2x2-mobile"],
+    ["text", "📱 ・ 3x3-mobile"],
+    ["text", "📱 ・ 4x4-mobile"]
+  ]],
+
+  ["Full Capa", [
+    ["text", "💸 ・ pix-gratis"],
+    ["text", "▫️ ・ 1x1-full-capa"],
+    ["text", "▫️ ・ 2x2-full-capa"],
+    ["text", "▫️ ・ 3x3-full-capa"],
+    ["text", "▫️ ・ 4x4-full-capa"]
+  ]],
+
+  ["Emulador", [
+    ["text", "💻 ・ 1x1-emu"],
+    ["text", "💻 ・ 2x2-emu"],
+    ["text", "💻 ・ 3x3-emu"],
+    ["text", "💻 ・ 4x4-emu"]
+  ]],
+
+  ["Misto", [
+    ["text", "📱💻 ・ 2x2-misto"],
+    ["text", "📱💻 ・ 3x3-misto"],
+    ["text", "📱💻 ・ 4x4-misto"]
+  ]],
+
+  ["Comunidade", [
+    ["text", "📝 ・ vagas"],
+    ["text", "🛒 ・ lojinha"],
+    ["text", "⚡ ・ roleta"],
+    ["text", "☑️ ・ regras"],
+    ["text", "📒 ・ regras-x1"],
+    ["text", "📒 ・ regras-full-capa"],
+    ["text", "👑 ・ ranking"],
+    ["text", "🏆 ・ ranking-diario"],
+    ["text", "💸 ・ feedback-adm"]
+  ]],
+
+  ["Telagem", [
+    ["text", "🔍 ・ regras"],
+    ["text", "📁 ・ exposed"]
+  ]],
+
+  ["Convite", [
+    ["text", "✉️ ・ convites"]
+  ]],
+
+  ["Área Mediador", [
+    ["text", "🔴 ・ regras"],
+    ["text", "🔴 ・ avisos-adm"],
+    ["text", "🔴 ・ chat-adm"],
+    ["text", "🔴 ・ fila-moderador"],
+    ["text", "🔴 ・ tabela-de-multas"],
+    ["text", "🔴 ・ multa-adm"],
+    ["text", "🔴 ・ solicitar-ban"],
+    ["text", "🔴 ・ renovação"],
+    ["text", "🔴 ・ rank-moderadores"],
+    ["text", "🔴 ・ cadastrar-pix"],
+    ["voice", "🔊 ・ CALL ADM"],
+    ["voice", "🔊 ・ CALL MUSICA"]
+  ]],
+
+  ["Área Telador", [
+    ["text", "‼️ ・ solicitação-telador"],
+    ["text", "🚫 ・ multas-telador"],
+    ["text", "🔔 ・ avisos-telador"],
+    ["text", "📘 ・ regras-telador"],
+    ["text", "🟡 ・ rank-telador"],
+    ["text", "🟣 ・ chat-tel"]
+  ]],
+
+  ["Área Suporte", [
+    ["text", "🔵 ・ ticket-duvidas"],
+    ["text", "🔵 ・ fotos-sup-aux"],
+    ["text", "🔵 ・ multa-sup-e-aux"],
+    ["text", "🔵 ・ regras-suportes-aux"],
+    ["text", "🔵 ・ rank-suporte"],
+    ["text", "🔵 ・ chat-suporte"],
+    ["text", "🔵 ・ ticket-resolvidos"],
+    ["text", "🔵 ・ avisos-sup"],
+    ["text", "🔵 ・ multas"],
+    ["voice", "🔊 ・ CALL SUP"]
+  ]],
+
+  ["Área Analista", [
+    ["text", "🟡 ・ horarios-ss"],
+    ["text", "🟡 ・ chat-ss"],
+    ["text", "🟡 ・ tabela-proxy"],
+    ["text", "🟡 ・ regras-ss"],
+    ["text", "🟡 ・ avisos-ss"],
+    ["text", "🟡 ・ solicitar-ss"],
+    ["text", "🟡 ・ pagamento-ss"],
+    ["voice", "🔊 ・ CALL ANALISTA"]
+  ]]
 ];
 
-const STAFF_ROLES = [
-  "Diretor",
-  "Gerente",
-  "Spv geral",
-  "STAFF"
-];
+// ======================================================
+// CLIENTE DISCORD
+// ======================================================
 
-const PRIVATE_ROLE_GROUPS = {
-  "Área Mediador": [
-    "Mediador",
-    ...STAFF_ROLES,
-    ...ADMIN_ROLES
-  ],
-
-  "Área Suporte": [
-    "Suporte",
-    ...STAFF_ROLES,
-    ...ADMIN_ROLES
-  ],
-
-  "Área Telador": [
-    "TELADOR",
-    ...STAFF_ROLES,
-    ...ADMIN_ROLES
-  ],
-
-  "Área Analista": [
-    "Analista",
-    ...STAFF_ROLES,
-    ...ADMIN_ROLES
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ]
-};
-
-// Estrutura inicial recuperada das categorias anteriores.
-// Os canais abaixo são exemplos de organização.
-// Você pode adicionar ou trocar os nomes dentro desta lista.
-
-const STRUCTURE = [
-  {
-    name: "📌 ・ INFORMAÇÕES",
-    channels: [
-      { name: "・avisos", type: "text" },
-      { name: "・regras", type: "text" },
-      { name: "・anúncios", type: "text" }
-    ]
-  },
-
-  {
-    name: "🎫 ・ ATENDIMENTO",
-    channels: [
-      { name: "・chat", type: "text" },
-      { name: "・suporte", type: "text" }
-    ]
-  },
-
-  {
-    name: "🎟️ ・ TICKETS",
-    channels: [
-      { name: "・abrir-ticket", type: "text" },
-      { name: "・tickets", type: "text" }
-    ]
-  },
-
-  {
-    name: "🏆 ・ PARTIDAS",
-    channels: [
-      { name: "・chat-partidas", type: "text" },
-      { name: "・resultados", type: "text" }
-    ]
-  },
-
-  {
-    name: "🐆 ・ PANTERA 5",
-    channels: [
-      { name: "・chat", type: "text" },
-      { name: "・recrutamento", type: "text" }
-    ]
-  },
-
-  {
-    name: "📱 ・ MOBILE",
-    channels: [
-      { name: "・chat", type: "text" },
-      { name: "・recrutamento", type: "text" }
-    ]
-  },
-
-  {
-    name: "🔥 ・ FULL CAPA",
-    channels: [
-      { name: "・chat", type: "text" },
-      { name: "・recrutamento", type: "text" }
-    ]
-  },
-
-  {
-    name: "🖥️ ・ EMULADOR",
-    channels: [
-      { name: "・chat", type: "text" },
-      { name: "・recrutamento", type: "text" }
-    ]
-  },
-
-  {
-    name: "🎮 ・ MISTO",
-    channels: [
-      { name: "・chat", type: "text" },
-      { name: "・recrutamento", type: "text" }
-    ]
-  },
-
-  {
-    name: "💬 ・ COMUNIDADE",
-    channels: [
-      { name: "・chat-geral", type: "text" },
-      { name: "・memes", type: "text" },
-      { name: "・divulgação", type: "text" },
-      { name: "🔊 ・ CALL GERAL", type: "voice" }
-    ]
-  },
-
-  {
-    name: "🎨 ・ TELAGEM",
-    channels: [
-      { name: "・chat-telagem", type: "text" },
-      { name: "・pedidos", type: "text" }
-    ]
-  },
-
-  {
-    name: "🔗 ・ CONVITE",
-    channels: [
-      { name: "・convites", type: "text" }
-    ]
-  },
-
-  {
-    name: "🔒 ・ ÁREA MEDIADOR",
-    private: true,
-    channels: [
-      { name: "・chat-mediador", type: "text" },
-      { name: "・avisos-mediador", type: "text" },
-      { name: "🔊 ・ CALL ADM", type: "voice" }
-    ]
-  },
-
-  {
-    name: "🔒 ・ ÁREA TELADOR",
-    private: true,
-    channels: [
-      { name: "・chat-telador", type: "text" },
-      { name: "・pedidos-telador", type: "text" }
-    ]
-  },
-
-  {
-    name: "🔒 ・ ÁREA SUPORTE",
-    private: true,
-    channels: [
-      { name: "・chat-suporte", type: "text" },
-      { name: "・atendimentos", type: "text" },
-      { name: "🔊 ・ CALL SUP", type: "voice" }
-    ]
-  },
-
-  {
-    name: "🔒 ・ ÁREA ANALISTA",
-    private: true,
-    channels: [
-      { name: "・chat-analista", type: "text" },
-      { name: "・relatórios", type: "text" },
-      { name: "🔊 ・ CALL ANALISTA", type: "voice" }
-    ]
-  }
-];
-
-// ======================================================
-// PERMISSÕES
-// ======================================================
-
-function getAdminPermissions() {
-  return [
-    PermissionFlagsBits.Administrator
-  ];
-}
-
-function getStaffPermissions() {
-  return [
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.ReadMessageHistory,
-    PermissionFlagsBits.CreatePublicThreads,
-    PermissionFlagsBits.CreatePrivateThreads,
-    PermissionFlagsBits.SendMessagesInThreads,
-    PermissionFlagsBits.EmbedLinks,
-    PermissionFlagsBits.AttachFiles,
-    PermissionFlagsBits.MentionEveryone,
-    PermissionFlagsBits.ManageMessages
-  ];
-}
-
-function getPrivateViewPermissions() {
-  return [
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.ReadMessageHistory
-  ];
-}
-
-function getPrivateStaffPermissions() {
-  return [
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.ReadMessageHistory,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.SendMessagesInThreads,
-    PermissionFlagsBits.EmbedLinks,
-    PermissionFlagsBits.AttachFiles,
-    PermissionFlagsBits.MentionEveryone
-  ];
-}
+});
 
 // ======================================================
 // CRIAR CARGOS
 // ======================================================
 
-async function createRoles(guild) {
-  const roles = new Map();
+async function criarCargos(guild) {
+  const cargosCriados = new Map();
 
-  for (const roleName of ROLE_NAMES) {
-    let role = guild.roles.cache.find(
-      item => item.name === roleName
+  for (const nome of cargos) {
+    let cargo = guild.roles.cache.find(
+      role => role.name === nome
     );
 
-    if (!role) {
-      const isAdmin = ADMIN_ROLES.includes(roleName);
+    if (!cargo) {
+      const administrador = [
+        "Dono",
+        "Founder",
+        "Ceo"
+      ].includes(nome);
 
-      role = await guild.roles.create({
-        name: roleName,
-        permissions: isAdmin
-          ? getAdminPermissions()
+      cargo = await guild.roles.create({
+        name: nome,
+        permissions: administrador
+          ? [PermissionFlagsBits.Administrator]
           : [],
-        reason: "Estrutura CENTRAL DE GB SYSTEM"
+        reason: "Organização CENTRAL DE GB SYSTEM"
       });
 
-      console.log("Cargo criado:", roleName);
+      console.log("Cargo criado: " + nome);
     }
 
-    roles.set(roleName, role);
+    cargosCriados.set(nome, cargo);
   }
 
-  return roles;
+  return cargosCriados;
 }
 
 // ======================================================
 // PERMISSÕES DAS CATEGORIAS
 // ======================================================
 
-function getCategoryOverwrites(guild, category, roles) {
+function permissoesCategoria(guild, nomeCategoria, cargosMap) {
   const overwrites = [];
 
-  // @everyone
+  const areasPrivadas = [
+    "Área Mediador",
+    "Área Telador",
+    "Área Suporte",
+    "Área Analista"
+  ];
+
+  const privada = areasPrivadas.includes(nomeCategoria);
+
+  // Permissão do @everyone
   overwrites.push({
     id: guild.roles.everyone.id,
-    deny: category.private
+    deny: privada
       ? [PermissionFlagsBits.ViewChannel]
       : [],
-    allow: category.private
+    allow: privada
       ? []
       : [PermissionFlagsBits.ViewChannel]
   });
 
-  // Administradores
-  for (const roleName of ADMIN_ROLES) {
-    const role = roles.get(roleName);
+  // Cargos administrativos
+  for (const nome of ["Dono", "Founder", "Ceo"]) {
+    const cargo = cargosMap.get(nome);
 
-    if (role) {
+    if (cargo) {
       overwrites.push({
-        id: role.id,
+        id: cargo.id,
         allow: [
           PermissionFlagsBits.ViewChannel,
           PermissionFlagsBits.SendMessages,
@@ -410,38 +268,70 @@ function getCategoryOverwrites(guild, category, roles) {
     }
   }
 
-  // Equipe geral
-  for (const roleName of STAFF_ROLES) {
-    const role = roles.get(roleName);
+  // Staff geral
+  const staff = [
+    "Diretor",
+    "Gerente",
+    "Spv geral",
+    "STAFF"
+  ];
 
-    if (role) {
+  for (const nome of staff) {
+    const cargo = cargosMap.get(nome);
+
+    if (cargo) {
       overwrites.push({
-        id: role.id,
-        allow: getStaffPermissions()
+        id: cargo.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.CreatePublicThreads,
+          PermissionFlagsBits.CreatePrivateThreads,
+          PermissionFlagsBits.SendMessagesInThreads,
+          PermissionFlagsBits.MentionEveryone,
+          PermissionFlagsBits.ManageMessages
+        ]
       });
     }
   }
 
-  // Cargos específicos de áreas privadas
-  if (category.private) {
-    const allowedRoles =
-      PRIVATE_ROLE_GROUPS[category.name] || [];
+  // Áreas privadas
+  if (privada) {
+    let cargosPermitidos = [];
 
-    for (const roleName of allowedRoles) {
-      const role = roles.get(roleName);
+    if (nomeCategoria === "Área Mediador") {
+      cargosPermitidos = ["Mediador"];
+    }
 
-      if (!role) continue;
+    if (nomeCategoria === "Área Telador") {
+      cargosPermitidos = ["TELADOR"];
+    }
 
-      const isStaff =
-        STAFF_ROLES.includes(roleName) ||
-        ADMIN_ROLES.includes(roleName);
+    if (nomeCategoria === "Área Suporte") {
+      cargosPermitidos = ["Suporte"];
+    }
 
-      overwrites.push({
-        id: role.id,
-        allow: isStaff
-          ? getPrivateStaffPermissions()
-          : getPrivateViewPermissions()
-      });
+    if (nomeCategoria === "Área Analista") {
+      cargosPermitidos = ["Analista"];
+    }
+
+    for (const nome of cargosPermitidos) {
+      const cargo = cargosMap.get(nome);
+
+      if (cargo) {
+        overwrites.push({
+          id: cargo.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.SendMessagesInThreads,
+            PermissionFlagsBits.EmbedLinks,
+            PermissionFlagsBits.AttachFiles
+          ]
+        });
+      }
     }
   }
 
@@ -452,460 +342,192 @@ function getCategoryOverwrites(guild, category, roles) {
 // CRIAR CATEGORIAS E CANAIS
 // ======================================================
 
-async function createStructure(guild, roles) {
-  let categoriesCreated = 0;
-  let channelsCreated = 0;
-  let channelsExisting = 0;
+async function criarEstrutura(guild, cargosMap) {
+  let criados = 0;
+  let existentes = 0;
+  let erros = [];
 
-  for (const categoryData of STRUCTURE) {
-    let category = guild.channels.cache.find(
-      channel =>
-        channel.type === ChannelType.GuildCategory &&
-        channel.name === categoryData.name
-    );
+  for (const item of estrutura) {
+    const nomeCategoria = item[0];
+    const canais = item[1];
 
-    if (!category) {
-      category = await guild.channels.create({
-        name: categoryData.name,
-        type: ChannelType.GuildCategory,
-        permissionOverwrites: getCategoryOverwrites(
-          guild,
-          categoryData,
-          roles
-        ),
-        reason: "Estrutura CENTRAL DE GB SYSTEM"
-      });
-
-      categoriesCreated++;
-
-      console.log(
-        "Categoria criada:",
-        categoryData.name
-      );
-    }
-
-    for (const channelData of categoryData.channels) {
-      const channelType =
-        channelData.type === "voice"
-          ? ChannelType.GuildVoice
-          : ChannelType.GuildText;
-
-      let channel = guild.channels.cache.find(
-        item =>
-          item.parentId === category.id &&
-          item.name === channelData.name &&
-          item.type === channelType
+    try {
+      let categoria = guild.channels.cache.find(
+        canal =>
+          canal.type === ChannelType.GuildCategory &&
+          canal.name === nomeCategoria
       );
 
-      if (channel) {
-        channelsExisting++;
-        continue;
+      if (!categoria) {
+        categoria = await guild.channels.create({
+          name: nomeCategoria,
+          type: ChannelType.GuildCategory,
+          permissionOverwrites: permissoesCategoria(
+            guild,
+            nomeCategoria,
+            cargosMap
+          )
+        });
+
+        criados++;
       }
 
-      await guild.channels.create({
-        name: channelData.name,
-        type: channelType,
-        parent: category.id,
-        reason: "Estrutura CENTRAL DE GB SYSTEM"
-      });
+      for (const canalInfo of canais) {
+        const tipo = canalInfo[0];
+        const nomeCanal = canalInfo[1];
 
-      channelsCreated++;
+        const tipoDiscord =
+          tipo === "voice"
+            ? ChannelType.GuildVoice
+            : ChannelType.GuildText;
 
-      console.log(
-        "Canal criado:",
-        channelData.name
+        const existe = guild.channels.cache.find(
+          canal =>
+            canal.parentId === categoria.id &&
+            canal.name === nomeCanal &&
+            canal.type === tipoDiscord
+        );
+
+        if (existe) {
+          existentes++;
+          continue;
+        }
+
+        await guild.channels.create({
+          name: nomeCanal,
+          type: tipoDiscord,
+          parent: categoria.id
+        });
+
+        criados++;
+
+        await new Promise(resolve =>
+          setTimeout(resolve, 400)
+        );
+      }
+    } catch (erro) {
+      console.error(
+        "Erro na categoria: " + nomeCategoria,
+        erro
       );
+
+      erros.push(nomeCategoria);
     }
   }
 
   return {
-    categoriesCreated,
-    channelsCreated,
-    channelsExisting
+    criados,
+    existentes,
+    erros
   };
 }
 
 // ======================================================
-// CRIAR TÓPICO DE EXEMPLO
+// COMANDO .CRIAR
 // ======================================================
 
-async function createExampleThread(guild) {
-  const parentChannel = guild.channels.cache.find(
-    channel =>
-      channel.type === ChannelType.GuildText &&
-      channel.name === "・chat-geral"
-  );
+const servidoresCriando = new Set();
 
-  if (!parentChannel) {
-    return false;
+client.once("ready", function () {
+  console.log("Bot conectado: " + client.user.tag);
+  console.log("CENTRAL DE GB SYSTEM");
+  console.log("Comando: .criar");
+});
+
+client.on("messageCreate", async function (message) {
+  if (message.author.bot) return;
+  if (!message.guild) return;
+
+  if (message.content.trim().toLowerCase() !== ".criar") {
+    return;
   }
 
-  const threadName = "Central de GB SYSTEM";
-
-  const existingThread =
-    parentChannel.threads.cache.find(
-      thread => thread.name === threadName
+  if (
+    !message.member.permissions.has(
+      PermissionFlagsBits.ManageChannels
+    )
+  ) {
+    await message.reply(
+      "Você precisa da permissão Gerenciar canais."
     );
-
-  if (existingThread) {
-    return false;
+    return;
   }
 
-  const starterMessage = await parentChannel.send(
-    "Tópico criado pela CENTRAL DE GB SYSTEM."
-  );
-
-  await starterMessage.startThread({
-    name: threadName,
-    autoArchiveDuration: 1440,
-    reason: "Tópico inicial do servidor"
-  });
-
-  return true;
-}
-
-// ======================================================
-// CLIENTES DOS BOTS
-// ======================================================
-
-const botClients = new Map();
-const creatingGuilds = new Set();
-
-async function startBot(botData) {
-  if (botClients.has(botData.id)) {
-    return true;
+  if (servidoresCriando.has(message.guild.id)) {
+    await message.reply(
+      "A CENTRAL DE GB SYSTEM já está criando neste servidor."
+    );
+    return;
   }
 
-  const client = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent
+  servidoresCriando.add(message.guild.id);
+
+  const status = await message.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor("#5865F2")
+        .setTitle("🚀 CENTRAL DE GB SYSTEM")
+        .setDescription(
+          "**Está começando a criar a estrutura do servidor!**\n\n" +
+          "⏳ Aguarde enquanto os cargos, categorias e canais são criados."
+        )
+        .setFooter({
+          text: "GB SYSTEM • Sistema de organização"
+        })
     ]
   });
 
-  client.on("messageCreate", async message => {
-    if (message.author.bot || !message.guild) return;
-
-    if (
-      message.content.trim().toLowerCase() !== ".criar"
-    ) {
-      return;
-    }
-
-    const bots = readBots();
-
-    const registered = bots.find(
-      bot => bot.id === botData.id
-    );
-
-    if (!registered || registered.status !== "active") {
-      return;
-    }
-
-    const guild = message.guild;
-
-    if (creatingGuilds.has(guild.id)) {
-      await message.reply(
-        "A estrutura já está sendo criada neste servidor."
-      );
-      return;
-    }
-
-    creatingGuilds.add(guild.id);
-
-    try {
-      await message.reply(
-        "CENTRAL DE GB SYSTEM está começando a criar!"
-      );
-
-      const roles = await createRoles(guild);
-
-      const result = await createStructure(
-        guild,
-        roles
-      );
-
-      const threadCreated =
-        await createExampleThread(guild);
-
-      await message.channel.send(
-        [
-          "CENTRAL DE GB SYSTEM finalizou!",
-          "",
-          `Categorias criadas: ${result.categoriesCreated}`,
-          `Canais criados: ${result.channelsCreated}`,
-          `Canais já existentes: ${result.channelsExisting}`,
-          `Tópico criado: ${threadCreated ? "Sim" : "Não"}`
-        ].join("\n")
-      );
-    } catch (error) {
-      console.error(
-        "Erro ao criar estrutura:",
-        error
-      );
-
-      await message.channel.send(
-        "Não consegui concluir a criação. Confira as permissões do bot e os logs da Railway."
-      );
-    } finally {
-      creatingGuilds.delete(guild.id);
-    }
-  });
-
   try {
-    await client.login(botData.token);
+    const cargosMap = await criarCargos(message.guild);
 
-    botClients.set(botData.id, client);
-
-    console.log(
-      "Bot conectado:",
-      client.user.username
+    const resultado = await criarEstrutura(
+      message.guild,
+      cargosMap
     );
 
-    return true;
-  } catch (error) {
-    console.error(
-      "Erro ao conectar bot:",
-      botData.username,
-      error.message
-    );
+    let resposta =
+      "Finalizado!\n" +
+      "Cargos configurados: " + cargos.length + "\n" +
+      "Categorias/canais criados: " + resultado.criados +
+      "\nJá existentes: " + resultado.existentes;
 
-    client.destroy();
-    return false;
-  }
-}
-
-function stopBot(botId) {
-  const client = botClients.get(botId);
-
-  if (client) {
-    client.destroy();
-    botClients.delete(botId);
-  }
-}
-
-// ======================================================
-// TESTE DA API
-// ======================================================
-
-app.get("/api/health", (req, res) => {
-  res.json({
-    online: true,
-    system: "CENTRAL DE GB SYSTEM"
-  });
-});
-
-// ======================================================
-// LISTAR BOTS
-// ======================================================
-
-app.get("/api/bots", (req, res) => {
-  const bots = readBots();
-
-  res.json(
-    bots.map(bot => ({
-      id: bot.id,
-      username: bot.username,
-      status: bot.status,
-      createdAt: bot.createdAt
-    }))
-  );
-});
-
-// ======================================================
-// CADASTRAR BOT
-// ======================================================
-
-app.post("/api/bots", async (req, res) => {
-  const token = req.body?.token;
-
-  if (
-    typeof token !== "string" ||
-    !token.trim()
-  ) {
-    return res.status(400).json({
-      error: "Informe o token do bot."
-    });
-  }
-
-  const cleanToken = token.trim();
-
-  const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
-  });
-
-  try {
-    await client.login(cleanToken);
-
-    const botId = client.user.id;
-    const username = client.user.username;
-
-    client.destroy();
-
-    const bots = readBots();
-
-    if (bots.some(bot => bot.id === botId)) {
-      return res.status(409).json({
-        error: "Este bot já está cadastrado."
-      });
+    if (resultado.erros.length > 0) {
+      resposta +=
+        "\n\nCategorias com erro: " +
+        resultado.erros.join(", ");
     }
 
-    const botData = {
-      id: botId,
-      username,
-      status: "active",
-      token: cleanToken,
-      createdAt: new Date().toISOString()
-    };
-
-    bots.push(botData);
-    saveBots(bots);
-
-    const connected = await startBot(botData);
-
-    if (!connected) {
-      const updatedBots = readBots().map(bot =>
-        bot.id === botId
-          ? { ...bot, status: "paused" }
-          : bot
-      );
-
-      saveBots(updatedBots);
-
-      return res.status(500).json({
-        error: "Bot cadastrado, mas não conseguiu iniciar."
-      });
-    }
-
-    res.json({
-      message: "Bot cadastrado com sucesso!",
-      bot: {
-        id: botId,
-        username,
-        status: "active"
-      }
+    await status.edit({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(
+            resultado.erros.length > 0
+              ? "#FFA500"
+              : "#57F287"
+          )
+          .setTitle("✅ CENTRAL DE GB SYSTEM")
+          .setDescription(resposta)
+          .setFooter({
+            text: "GB SYSTEM • Sistema de organização"
+          })
+          .setTimestamp()
+      ]
     });
-  } catch (error) {
-    client.destroy();
+  } catch (erro) {
+    console.error("Erro geral ao criar:", erro);
 
-    console.error(
-      "Erro no cadastro:",
-      error.message
-    );
-
-    res.status(400).json({
-      error: "Token inválido ou bot não conseguiu conectar."
+    await status.edit({
+      content:
+        "Ocorreu um erro durante a criação. Confira os logs da Railway e as permissões do bot.",
+      embeds: []
     });
+  } finally {
+    servidoresCriando.delete(message.guild.id);
   }
 });
 
 // ======================================================
-// ATIVAR OU PAUSAR
+// LOGIN
 // ======================================================
 
-app.patch("/api/bots/:id", async (req, res) => {
-  const { status } = req.body || {};
-
-  if (!["active", "paused"].includes(status)) {
-    return res.status(400).json({
-      error: "Status inválido."
-    });
-  }
-
-  const bots = readBots();
-
-  const bot = bots.find(
-    item => item.id === req.params.id
-  );
-
-  if (!bot) {
-    return res.status(404).json({
-      error: "Bot não encontrado."
-    });
-  }
-
-  if (status === "paused") {
-    bot.status = "paused";
-    saveBots(bots);
-
-    stopBot(bot.id);
-
-    return res.json({
-      message: "Bot pausado.",
-      status: "paused"
-    });
-  }
-
-  const connected = await startBot(bot);
-
-  if (!connected) {
-    return res.status(500).json({
-      error: "Não foi possível conectar o bot."
-    });
-  }
-
-  bot.status = "active";
-  saveBots(bots);
-
-  res.json({
-    message: "Bot ativado.",
-    status: "active"
-  });
-});
-
-// ======================================================
-// REMOVER BOT
-// ======================================================
-
-app.delete("/api/bots/:id", (req, res) => {
-  const bots = readBots();
-
-  const bot = bots.find(
-    item => item.id === req.params.id
-  );
-
-  if (!bot) {
-    return res.status(404).json({
-      error: "Bot não encontrado."
-    });
-  }
-
-  stopBot(bot.id);
-
-  saveBots(
-    bots.filter(item => item.id !== bot.id)
-  );
-
-  res.json({
-    message: "Bot removido com sucesso."
-  });
-});
-
-// ======================================================
-// RESTAURAR BOTS
-// ======================================================
-
-async function restoreBots() {
-  console.log("Restaurando bots...");
-
-  for (const bot of readBots()) {
-    if (bot.status === "active") {
-      await startBot(bot);
-    }
-  }
-
-  console.log("Restauração finalizada.");
-}
-
-// ======================================================
-// INICIAR SERVIDOR
-// ======================================================
-
-app.listen(PORT, async () => {
-  console.log(
-    "CENTRAL DE GB SYSTEM online na porta " + PORT
-  );
-
-  await restoreBots();
-});
+client.login(TOKEN);
