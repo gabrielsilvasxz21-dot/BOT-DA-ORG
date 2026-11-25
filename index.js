@@ -15,13 +15,12 @@ const {
 } = require("discord.js");
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
+
 const DATA_DIR = path.join(__dirname, "data");
 const BOTS_FILE = path.join(DATA_DIR, "bots.json");
 
-const SITE_ORIGIN =
-  "https://gabrielsilvasxz21-dot.github.io";
+const SITE_ORIGIN = "https://gabrielsilvasxz21-dot.github.io";
 
 app.use(express.json({ limit: "10kb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -58,10 +57,13 @@ if (!fs.existsSync(BOTS_FILE)) {
 
 function readBots() {
   try {
-    return JSON.parse(
+    const data = JSON.parse(
       fs.readFileSync(BOTS_FILE, "utf8")
     );
-  } catch {
+
+    return Array.isArray(data) ? data : [];
+  } catch (erro) {
+    console.error("Erro lendo bots.json:", erro);
     return [];
   }
 }
@@ -81,7 +83,7 @@ const botClients = new Map();
 const servidoresCriando = new Set();
 
 // ======================================================
-// CARGOS ORIGINAIS
+// CARGOS
 // ======================================================
 
 const cargos = [
@@ -238,6 +240,8 @@ const estrutura = [
 // ======================================================
 
 async function criarCargos(guild) {
+  await guild.roles.fetch();
+
   const cargosCriados = new Map();
 
   for (const nome of cargos) {
@@ -590,8 +594,14 @@ async function startBot(botData) {
     throw new Error("Token do bot não informado.");
   }
 
-  if (botClients.has(botData.id)) {
-    return botClients.get(botData.id);
+  const existente = botClients.get(botData.id);
+
+  if (existente && existente.isReady()) {
+    return existente;
+  }
+
+  if (existente) {
+    stopBot(botData.id);
   }
 
   const client = new Client({
@@ -618,6 +628,9 @@ async function startBot(botData) {
 
   botClients.set(botData.id, client);
 
+  botData.name = client.user.username;
+  botData.username = client.user.username;
+
   return client;
 }
 
@@ -631,7 +644,31 @@ function stopBot(botId) {
 }
 
 // ======================================================
-// API - STATUS DO RAILWAY
+// FORMATO PADRÃO ENVIADO AO SITE
+// ======================================================
+
+function botPublico(bot) {
+  const client = botClients.get(bot.id);
+
+  // Se existir o campo active, ele tem prioridade.
+  const ativo =
+    typeof bot.active === "boolean"
+      ? bot.active
+      : bot.status !== "paused";
+
+  return {
+    id: bot.id,
+    name: bot.name || bot.username || "Bot Discord",
+    username: bot.username || bot.name || "Bot Discord",
+    active: ativo,
+    status: ativo ? "active" : "paused",
+    online: Boolean(client && client.isReady()),
+    createdAt: bot.createdAt || null
+  };
+}
+
+// ======================================================
+// API - STATUS
 // ======================================================
 
 app.get("/api/health", (req, res) => {
@@ -648,22 +685,11 @@ app.get("/api/health", (req, res) => {
 app.get("/api/bots", (req, res) => {
   const bots = readBots();
 
-  res.json(
-    bots.map(bot => {
-      const client = botClients.get(bot.id);
-
-      return {
-        id: bot.id,
-        name: bot.name || "Bot Discord",
-        active: bot.active !== false,
-        online: Boolean(client && client.isReady())
-      };
-    })
-  );
+  res.json(bots.map(botPublico));
 });
 
 // ======================================================
-// API - CADASTRAR BOT PELO SITE
+// API - CADASTRAR BOT
 // ======================================================
 
 app.post("/api/bots", async (req, res) => {
@@ -684,25 +710,27 @@ app.post("/api/bots", async (req, res) => {
     id: crypto.randomUUID(),
     token,
     name: "Bot Discord",
-    active: true
+    username: "Bot Discord",
+    active: true,
+    status: "active",
+    createdAt: new Date().toISOString()
   };
 
   try {
     const client = await startBot(botData);
 
     botData.name = client.user.username;
+    botData.username = client.user.username;
+    botData.active = true;
+    botData.status = "active";
 
     bots.push(botData);
     saveBots(bots);
 
     return res.status(201).json({
       success: true,
-      bot: {
-        id: botData.id,
-        name: botData.name,
-        active: true,
-        online: client.isReady()
-      }
+      message: "Bot conectado e cadastrado!",
+      bot: botPublico(botData)
     });
   } catch (erro) {
     console.error("Erro cadastrando bot:", erro);
@@ -721,7 +749,9 @@ app.post("/api/bots", async (req, res) => {
 
 app.patch("/api/bots/:id", async (req, res) => {
   const bots = readBots();
-  const bot = bots.find(item => item.id === req.params.id);
+  const bot = bots.find(
+    item => item.id === req.params.id
+  );
 
   if (!bot) {
     return res.status(404).json({
@@ -729,40 +759,54 @@ app.patch("/api/bots/:id", async (req, res) => {
     });
   }
 
-  if (typeof req.body.active !== "boolean") {
+  let ativar;
+
+  // Aceita active: true ou false
+  if (typeof req.body.active === "boolean") {
+    ativar = req.body.active;
+  }
+
+  // Também aceita status: active ou paused
+  else if (req.body.status === "active") {
+    ativar = true;
+  } else if (req.body.status === "paused") {
+    ativar = false;
+  } else {
     return res.status(400).json({
       error: "Informe active como true ou false."
     });
   }
 
-  if (req.body.active) {
+  if (ativar) {
     try {
-      await startBot(bot);
+      const client = await startBot(bot);
+
+      bot.name = client.user.username;
+      bot.username = client.user.username;
       bot.active = true;
+      bot.status = "active";
     } catch (erro) {
       console.error("Erro ativando bot:", erro);
 
       return res.status(400).json({
-        error: "Não foi possível ativar o bot."
+        error: "Não foi possível ativar o bot. Confira o token."
       });
     }
   } else {
     bot.active = false;
+    bot.status = "paused";
+
     stopBot(bot.id);
   }
 
   saveBots(bots);
 
-  const client = botClients.get(bot.id);
-
   return res.json({
     success: true,
-    bot: {
-      id: bot.id,
-      name: bot.name,
-      active: bot.active,
-      online: Boolean(client && client.isReady())
-    }
+    message: ativar
+      ? "Bot ativado!"
+      : "Bot pausado!",
+    bot: botPublico(bot)
   });
 });
 
@@ -772,7 +816,9 @@ app.patch("/api/bots/:id", async (req, res) => {
 
 app.delete("/api/bots/:id", (req, res) => {
   const bots = readBots();
-  const bot = bots.find(item => item.id === req.params.id);
+  const bot = bots.find(
+    item => item.id === req.params.id
+  );
 
   if (!bot) {
     return res.status(404).json({
@@ -782,34 +828,58 @@ app.delete("/api/bots/:id", (req, res) => {
 
   stopBot(bot.id);
 
-  saveBots(
-    bots.filter(item => item.id !== bot.id)
+  const atualizados = bots.filter(
+    item => item.id !== bot.id
   );
 
+  saveBots(atualizados);
+
   return res.json({
-    success: true
+    success: true,
+    message: "Bot removido!"
   });
 });
 
 // ======================================================
-// RESTAURAR BOTS ATIVOS AO REINICIAR O RAILWAY
+// RESTAURAR BOTS AO REINICIAR RAILWAY
 // ======================================================
 
 async function restaurarBots() {
   const bots = readBots();
 
   for (const bot of bots) {
-    if (bot.active === false) continue;
+    const ativo =
+      typeof bot.active === "boolean"
+        ? bot.active
+        : bot.status !== "paused";
+
+    if (!ativo) {
+      bot.active = false;
+      bot.status = "paused";
+      continue;
+    }
 
     try {
-      await startBot(bot);
+      const client = await startBot(bot);
+
+      bot.name = client.user.username;
+      bot.username = client.user.username;
+      bot.active = true;
+      bot.status = "active";
+
+      console.log("Bot restaurado: " + bot.name);
     } catch (erro) {
       console.error(
         "Não foi possível iniciar o bot " + bot.name,
         erro
       );
+
+      bot.active = false;
+      bot.status = "paused";
     }
   }
+
+  saveBots(bots);
 }
 
 // ======================================================
