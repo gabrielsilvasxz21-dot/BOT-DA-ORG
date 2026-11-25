@@ -1,277 +1,274 @@
+require("dotenv").config();
 
+const express = require("express");
 const {
   Client,
-  GatewayIntentBits,
-  ChannelType,
-  PermissionFlagsBits,
-  EmbedBuilder
+  GatewayIntentBits
 } = require("discord.js");
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
-if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-  console.log("Configure as variáveis do Railway.");
+const app = express();
+
+app.use(express.json({ limit: "10kb" }));
+app.use(express.static("public"));
+
+const PORT = process.env.PORT || 3000;
+const ADMIN_KEY = process.env.ADMIN_KEY;
+const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY;
+const DATA_DIR = process.env.DATA_DIR || "./data";
+
+if (!ADMIN_KEY || !ENCRYPTION_KEY) {
+  console.error("Configure ADMIN_KEY e TOKEN_ENCRYPTION_KEY.");
   process.exit(1);
 }
 
-const estrutura = [
-  ["Informações", [
-    ["text", "⚡ ・ rumo-1k"],
-    ["text", "📱 ・ redes-sociais"],
-    ["text", "🎉 ・ 1-win-20-no-px"],
-    ["text", "⚠️ ・ como-transmitir-tela"]
-  ]],
+if (!/^[a-fA-F0-9]{64}$/.test(ENCRYPTION_KEY)) {
+  console.error("TOKEN_ENCRYPTION_KEY precisa ter 64 caracteres hexadecimais.");
+  process.exit(1);
+}
 
-  ["Atendimento", [
-    ["text", "📬 ・ ticket"]
-  ]],
+const key = Buffer.from(ENCRYPTION_KEY, "hex");
+const databaseFile = path.join(DATA_DIR, "bots.json");
 
-  ["Tickets", [
-    ["text", "📘 ・ suporte"],
-    ["text", "📘 ・ reembolso"],
-    ["text", "📘 ・ receber-evento"],
-    ["text", "📘 ・ vagas"],
-    ["text", "📘 ・ divulgação"]
-  ]],
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
-  ["Partidas", [
-    ["text", "⚡・seu nome"]
-  ]],
+if (!fs.existsSync(databaseFile)) {
+  fs.writeFileSync(databaseFile, "[]");
+}
 
-  ["fila exemplo 5", [
-    ["text", "💵・pagar-2-00-208"]
-  ]],
+function readBots() {
+  return JSON.parse(fs.readFileSync(databaseFile, "utf8"));
+}
 
-  ["Mobile", [
-    ["text", "🟡・nome canal"],
-    ["text", "📱・1x1-mobile"],
-    ["text", "📱・2x2-mobile"],
-    ["text", "📱・3x3-mobile"],
-    ["text", "📱・4x4-mobile"]
-  ]],
+function saveBots(bots) {
+  fs.writeFileSync(databaseFile, JSON.stringify(bots, null, 2));
+}
 
-  ["Full Capa", [
-    ["text", "💸・pix-gratis"],
-    ["text", "▫️・1x1-full-capa"],
-    ["text", "▫️・2x2-full-capa"],
-    ["text", "▫️・3x3-full-capa"],
-    ["text", "▫️・4x4-full-capa"]
-  ]],
+function encryptToken(token) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
 
-  ["Emulador", [
-    ["text", "💻・1x1-emu"],
-    ["text", "💻・2x2-emu"],
-    ["text", "💻・3x3-emu"],
-    ["text", "💻・4x4-emu"]
-  ]],
+  const encrypted = Buffer.concat([
+    cipher.update(token, "utf8"),
+    cipher.final()
+  ]);
 
-  ["Misto", [
-    ["text", "📱💻・2x2-misto"],
-    ["text", "📱💻・3x3-misto"],
-    ["text", "📱💻・4x4-misto"]
-  ]],
+  return {
+    iv: iv.toString("hex"),
+    data: encrypted.toString("hex"),
+    tag: cipher.getAuthTag().toString("hex")
+  };
+}
 
-  ["Comunidade", [
-    ["text", "📝・vagas"],
-    ["text", "🛒・lojinha"],
-    ["text", "⚡・roleta"],
-    ["text", "☑️・regras"],
-    ["text", "📒・regras-x1"],
-    ["text", "📒・regras-full-capa"],
-    ["text", "👑・ranking"],
-    ["text", "🏆・ranking-diario"],
-    ["text", "💸・feedback-adm"]
-  ]],
+function decryptToken(encrypted) {
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    key,
+    Buffer.from(encrypted.iv, "hex")
+  );
 
-  ["Telagem", [
-    ["text", "🔍・regras"],
-    ["text", "📁・exposed"]
-  ]],
+  decipher.setAuthTag(Buffer.from(encrypted.tag, "hex"));
 
-  ["Convite", [
-    ["text", "✉️ ・ convites"]
-  ]],
+  return Buffer.concat([
+    decipher.update(Buffer.from(encrypted.data, "hex")),
+    decipher.final()
+  ]).toString("utf8");
+}
 
-  ["Área Mediador", [
-    ["text", "🔴 ・ regras"],
-    ["text", "🔴 ・ avisos-adm"],
-    ["text", "🔴 ・ chat-adm"],
-    ["text", "🔴 ・ fila-moderador"],
-    ["text", "🔴 ・ tabela-de-multas"],
-    ["text", "🔴 ・ multa-adm"],
-    ["text", "🔴 ・ solicitar-ban"],
-    ["text", "🔴 ・ renovação"],
-    ["text", "🔴 ・ rank-moderadores"],
-    ["text", "🔴 ・ cadastrar-pix"],
-    ["voice", "🔊 ・ CALL ADM"],
-    ["voice", "🔊 ・ CALL MUSICA"]
-  ]],
+function adminOnly(req, res, next) {
+  const provided = req.headers["x-admin-key"];
 
-  ["Área Telador", [
-    ["text", "‼️ ・ solicitação-telador"],
-    ["text", "🚫 ・ multas-telador"],
-    ["text", "🔔 ・ avisos-telador"],
-    ["text", "📘 ・ regras-telador"],
-    ["text", "🟡 ・ rank-telador"],
-    ["text", "🟣 ・ chat-tel"]
-  ]],
-
-  ["Área Suporte", [
-    ["text", "🔵 ・ ticket-duvidas"],
-    ["text", "🔵 ・ fotos-sup-aux"],
-    ["text", "🔵 ・ multa-sup-e-aux"],
-    ["text", "🔵 ・ regras-suportes-aux"],
-    ["text", "🔵 ・ rank-suporte"],
-    ["text", "🔵 ・ chat-suporte"],
-    ["text", "🔵 ・ ticket-resolvidos"],
-    ["text", "🔵 ・ avisos-sup"],
-    ["text", "🔵 ・ multas"],
-    ["voice", "🔊 ・ CALL SUP"]
-  ]],
-
-  ["Área Analista", [
-    ["text", "🟡 ・ horarios-ss"],
-    ["text", "🟡 ・ chat-ss"],
-    ["text", "🟡 ・ tabela-proxy"],
-    ["text", "🟡 ・ regras-ss"],
-    ["text", "🟡 ・ avisos-ss"],
-    ["text", "🟡 ・ solicitar-ss"],
-    ["text", "🟡 ・ pagamento-ss"],
-    ["voice", "🔊 ・ CALL ANALISTA"]
-  ]]
-];
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
-
-// COMANDO .CRIAR
-client.once("ready", function () {
-  console.log("Bot conectado: " + client.user.tag);
-  console.log("CENTRAL DE GB SYSTEM");
-  console.log("Comando: .criar");
-});
-
-client.on("messageCreate", async function (message) {
-  if (message.author.bot) return;
-  if (!message.guild) return;
-
-  if (message.content.trim().toLowerCase() !== ".criar") return;
-
-  if (!message.member.permissions.has(
-    PermissionFlagsBits.ManageChannels
-  )) {
-    await message.reply({
-      content: "Você precisa da permissão Gerenciar canais."
+  if (!provided || provided !== ADMIN_KEY) {
+    return res.status(401).json({
+      error: "Acesso administrativo negado."
     });
-    return;
   }
 
-  await message.reply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor("#5865F2")
-        .setTitle("🚀 CENTRAL DE GB SYSTEM")
-        .setDescription(
-          "**Está começando a criar a estrutura do servidor!**\n\n" +
-          "⏳ Aguarde enquanto as categorias e canais são criados."
-        )
-        .setFooter({
-          text: "GB SYSTEM • Sistema de organização"
-        })
+  next();
+}
+
+const botClients = new Map();
+
+async function startBot(botData) {
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent
     ]
-  }).then(async function (status) {
+  });
 
-    let criados = 0;
-    let existentes = 0;
-    let erros = [];
+  client.on("messageCreate", async message => {
+    if (message.author.bot || !message.guild) return;
 
-    for (const item of estrutura) {
-      const nomeCategoria = item[0];
-      const canais = item[1];
-
-      try {
-        let categoria = message.guild.channels.cache.find(
-          function (canal) {
-            return canal.type === ChannelType.GuildCategory &&
-              canal.name === nomeCategoria;
-          }
-        );
-
-        if (!categoria) {
-          categoria = await message.guild.channels.create({
-            name: nomeCategoria,
-            type: ChannelType.GuildCategory
-          });
-
-          criados++;
-        }
-
-        for (const canalInfo of canais) {
-          const tipo = canalInfo[0];
-          const nomeCanal = canalInfo[1];
-
-          const existe = message.guild.channels.cache.find(
-            function (canal) {
-              return canal.parentId === categoria.id &&
-                canal.name === nomeCanal;
-            }
-          );
-
-          if (existe) {
-            existentes++;
-            continue;
-          }
-
-          await message.guild.channels.create({
-            name: nomeCanal,
-            type: tipo === "voice"
-              ? ChannelType.GuildVoice
-              : ChannelType.GuildText,
-            parent: categoria.id
-          });
-
-          criados++;
-
-          await new Promise(function (resolve) {
-            setTimeout(resolve, 400);
-          });
-        }
-
-      } catch (erro) {
-        console.log("Erro na categoria: " + nomeCategoria);
-        console.log(erro);
-        erros.push(nomeCategoria);
-      }
+    if (message.content.trim().toLowerCase() !== ".criar") {
+      return;
     }
 
-    let resposta =
-      "Finalizado! Criados: " + criados +
-      " | Já existentes: " + existentes;
+    const bots = readBots();
+    const registered = bots.find(bot => bot.id === botData.id);
 
-    if (erros.length > 0) {
-      resposta += "\nCategorias com erro: " + erros.join(", ");
+    if (!registered || registered.status !== "active") {
+      await message.reply(
+        "Este bot está pausado ou não está autorizado pela CENTRAL DE GB SYSTEM."
+      );
+      return;
     }
 
-    await status.edit({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(erros.length > 0 ? "#FFA500" : "#57F287")
-          .setTitle("✅ CENTRAL DE GB SYSTEM")
-          .setDescription(resposta)
-          .setFooter({
-            text: "GB SYSTEM • Sistema de organização"
-          })
-          .setTimestamp()
-      ]
+    await message.reply(
+      "CENTRAL DE GB SYSTEM está começando a criar!"
+    );
+
+    // A criação de categorias e canais será integrada aqui.
+  });
+
+  try {
+    await client.login(decryptToken(botData.token));
+
+    botClients.set(botData.id, client);
+
+    console.log("Bot conectado:", client.user.username);
+  } catch (error) {
+    console.error("Não foi possível conectar um bot cadastrado.");
+    client.destroy();
+  }
+}
+
+app.get("/api/bots", adminOnly, (req, res) => {
+  const bots = readBots();
+
+  res.json(
+    bots.map(bot => ({
+      id: bot.id,
+      username: bot.username,
+      status: bot.status,
+      createdAt: bot.createdAt
+    }))
+  );
+});
+
+app.post("/api/bots", adminOnly, async (req, res) => {
+  const token = req.body.token;
+
+  if (typeof token !== "string" || !token.trim()) {
+    return res.status(400).json({
+      error: "Informe o token do bot."
     });
+  }
+
+  const client = new Client({
+    intents: [GatewayIntentBits.Guilds]
+  });
+
+  try {
+    await client.login(token.trim());
+
+    const botId = client.user.id;
+    const username = client.user.username;
+
+    client.destroy();
+
+    const bots = readBots();
+
+    if (bots.some(bot => bot.id === botId)) {
+      return res.status(409).json({
+        error: "Este bot já está cadastrado."
+      });
+    }
+
+    const botData = {
+      id: botId,
+      username,
+      status: "active",
+      token: encryptToken(token.trim()),
+      createdAt: new Date().toISOString()
+    };
+
+    bots.push(botData);
+    saveBots(bots);
+
+    await startBot(botData);
+
+    res.json({
+      message: "Bot cadastrado com sucesso.",
+      bot: {
+        id: botId,
+        username,
+        status: "active"
+      }
+    });
+  } catch (error) {
+    client.destroy();
+
+    res.status(400).json({
+      error: "Token inválido ou bot não conseguiu conectar."
+    });
+  }
+});
+
+app.patch("/api/bots/:id", adminOnly, (req, res) => {
+  const { status } = req.body;
+
+  if (!["active", "paused"].includes(status)) {
+    return res.status(400).json({
+      error: "Status inválido."
+    });
+  }
+
+  const bots = readBots();
+  const bot = bots.find(item => item.id === req.params.id);
+
+  if (!bot) {
+    return res.status(404).json({
+      error: "Bot não encontrado."
+    });
+  }
+
+  bot.status = status;
+  saveBots(bots);
+
+  res.json({
+    message: "Status atualizado.",
+    status
   });
 });
 
-client.login(TOKEN);
+app.delete("/api/bots/:id", adminOnly, (req, res) => {
+  const bots = readBots();
+  const bot = bots.find(item => item.id === req.params.id);
+
+  if (!bot) {
+    return res.status(404).json({
+      error: "Bot não encontrado."
+    });
+  }
+
+  const client = botClients.get(bot.id);
+
+  if (client) {
+    client.destroy();
+    botClients.delete(bot.id);
+  }
+
+  saveBots(bots.filter(item => item.id !== bot.id));
+
+  res.json({
+    message: "Bot removido da CENTRAL DE GB SYSTEM."
+  });
+});
+
+async function restoreBots() {
+  for (const bot of readBots()) {
+    if (bot.status === "active") {
+      await startBot(bot);
+    }
+  }
+}
+
+app.listen(PORT, async () => {
+  console.log("CENTRAL DE GB SYSTEM online na porta " + PORT);
+  await restoreBots();
+});
