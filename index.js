@@ -1,6 +1,11 @@
 
 require("dotenv").config();
 
+const express = require("express");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+
 const {
   Client,
   GatewayIntentBits,
@@ -9,17 +14,54 @@ const {
   EmbedBuilder
 } = require("discord.js");
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
+const app = express();
 
-if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-  console.log("Configure as variáveis do Railway.");
-  process.exit(1);
+const PORT = process.env.PORT || 3000;
+const DATA_DIR = path.join(__dirname, "data");
+const BOTS_FILE = path.join(DATA_DIR, "bots.json");
+
+const SITE_ORIGIN = "https://gabrielsilvasxz21-dot.github.io";
+
+app.use(express.json({ limit: "10kb" }));
+app.use(express.static(path.join(__dirname, "public")));
+
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", SITE_ORIGIN);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+if (!fs.existsSync(BOTS_FILE)) {
+  fs.writeFileSync(BOTS_FILE, "[]");
+}
+
+function readBots() {
+  try {
+    return JSON.parse(fs.readFileSync(BOTS_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function saveBots(bots) {
+  fs.writeFileSync(BOTS_FILE, JSON.stringify(bots, null, 2));
+}
+
+const botClients = new Map();
+const servidoresCriando = new Set();
+
 // ======================================================
-// CARGOS
+// CARGOS ORIGINAIS
 // ======================================================
 
 const cargos = [
@@ -172,18 +214,6 @@ const estrutura = [
 ];
 
 // ======================================================
-// CLIENTE DISCORD
-// ======================================================
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
-
-// ======================================================
 // CRIAR CARGOS
 // ======================================================
 
@@ -235,7 +265,6 @@ function permissoesCategoria(guild, nomeCategoria, cargosMap) {
 
   const privada = areasPrivadas.includes(nomeCategoria);
 
-  // Permissão do @everyone
   overwrites.push({
     id: guild.roles.everyone.id,
     deny: privada
@@ -345,7 +374,9 @@ function permissoesCategoria(guild, nomeCategoria, cargosMap) {
 async function criarEstrutura(guild, cargosMap) {
   let criados = 0;
   let existentes = 0;
-  let erros = [];
+  const erros = [];
+
+  await guild.channels.fetch();
 
   for (const item of estrutura) {
     const nomeCategoria = item[0];
@@ -370,6 +401,8 @@ async function criarEstrutura(guild, cargosMap) {
         });
 
         criados++;
+      } else {
+        existentes++;
       }
 
       for (const canalInfo of canais) {
@@ -423,111 +456,324 @@ async function criarEstrutura(guild, cargosMap) {
 }
 
 // ======================================================
-// COMANDO .CRIAR
+// COMANDO .CRIAR - INTEGRADO AO BOT CADASTRADO NO SITE
 // ======================================================
 
-const servidoresCriando = new Set();
+function configurarComandos(client) {
+  client.on("messageCreate", async function (message) {
+    if (message.author.bot) return;
+    if (!message.guild) return;
 
-client.once("ready", function () {
-  console.log("Bot conectado: " + client.user.tag);
-  console.log("CENTRAL DE GB SYSTEM");
-  console.log("Comando: .criar");
-});
+    if (message.content.trim().toLowerCase() !== ".criar") {
+      return;
+    }
 
-client.on("messageCreate", async function (message) {
-  if (message.author.bot) return;
-  if (!message.guild) return;
+    if (
+      !message.member.permissions.has(
+        PermissionFlagsBits.ManageChannels
+      )
+    ) {
+      await message.reply(
+        "Você precisa da permissão Gerenciar canais."
+      );
+      return;
+    }
 
-  if (message.content.trim().toLowerCase() !== ".criar") {
-    return;
+    if (servidoresCriando.has(message.guild.id)) {
+      await message.reply(
+        "A CENTRAL DE GB SYSTEM já está criando neste servidor."
+      );
+      return;
+    }
+
+    servidoresCriando.add(message.guild.id);
+
+    let status;
+
+    try {
+      status = await message.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor("#5865F2")
+            .setTitle("🚀 CENTRAL DE GB SYSTEM")
+            .setDescription(
+              "**CENTRAL DE GB SYSTEM está começando a criar!**\n\n" +
+              "⏳ Aguarde enquanto os cargos, categorias e canais são criados."
+            )
+            .setFooter({
+              text: "GB SYSTEM • Sistema de organização"
+            })
+        ]
+      });
+
+      const cargosMap = await criarCargos(message.guild);
+
+      const resultado = await criarEstrutura(
+        message.guild,
+        cargosMap
+      );
+
+      let resposta =
+        "Finalizado!\n" +
+        "Cargos configurados: " + cargos.length + "\n" +
+        "Categorias/canais criados: " + resultado.criados +
+        "\nJá existentes: " + resultado.existentes;
+
+      if (resultado.erros.length > 0) {
+        resposta +=
+          "\n\nCategorias com erro: " +
+          resultado.erros.join(", ");
+      }
+
+      await status.edit({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(
+              resultado.erros.length > 0
+                ? "#FFA500"
+                : "#57F287"
+            )
+            .setTitle("✅ CENTRAL DE GB SYSTEM")
+            .setDescription(resposta)
+            .setFooter({
+              text: "GB SYSTEM • Sistema de organização"
+            })
+            .setTimestamp()
+        ]
+      });
+    } catch (erro) {
+      console.error("Erro geral ao criar:", erro);
+
+      if (status) {
+        await status.edit({
+          content:
+            "Ocorreu um erro durante a criação. Confira os logs da Railway e as permissões do bot.",
+          embeds: []
+        }).catch(() => {});
+      }
+    } finally {
+      servidoresCriando.delete(message.guild.id);
+    }
+  });
+}
+
+// ======================================================
+// INICIAR BOT PELO TOKEN RECEBIDO DO SITE
+// ======================================================
+
+async function startBot(botData) {
+  if (!botData || !botData.token) {
+    throw new Error("Token do bot não informado.");
   }
 
-  if (
-    !message.member.permissions.has(
-      PermissionFlagsBits.ManageChannels
-    )
-  ) {
-    await message.reply(
-      "Você precisa da permissão Gerenciar canais."
-    );
-    return;
+  if (botClients.has(botData.id)) {
+    return botClients.get(botData.id);
   }
 
-  if (servidoresCriando.has(message.guild.id)) {
-    await message.reply(
-      "A CENTRAL DE GB SYSTEM já está criando neste servidor."
-    );
-    return;
-  }
-
-  servidoresCriando.add(message.guild.id);
-
-  const status = await message.reply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor("#5865F2")
-        .setTitle("🚀 CENTRAL DE GB SYSTEM")
-        .setDescription(
-          "**Está começando a criar a estrutura do servidor!**\n\n" +
-          "⏳ Aguarde enquanto os cargos, categorias e canais são criados."
-        )
-        .setFooter({
-          text: "GB SYSTEM • Sistema de organização"
-        })
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent
     ]
   });
 
+  configurarComandos(client);
+
+  client.once("ready", function () {
+    console.log("Bot conectado: " + client.user.tag);
+    console.log("CENTRAL DE GB SYSTEM");
+    console.log("Comando: .criar");
+  });
+
+  client.on("error", erro => {
+    console.error("Erro no bot " + botData.id, erro);
+  });
+
+  await client.login(botData.token);
+
+  botClients.set(botData.id, client);
+
+  return client;
+}
+
+function stopBot(botId) {
+  const client = botClients.get(botId);
+
+  if (client) {
+    client.destroy();
+    botClients.delete(botId);
+  }
+}
+
+// ======================================================
+// API DO SEU SITE
+// ======================================================
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    online: true,
+    service: "CENTRAL GB SYSTEM"
+  });
+});
+
+// Listar bots sem expor tokens
+app.get("/api/bots", (req, res) => {
+  const bots = readBots();
+
+  res.json(
+    bots.map(bot => ({
+      id: bot.id,
+      name: bot.name,
+      active: bot.active,
+      online: botClients.has(bot.id)
+    }))
+  );
+});
+
+// Cadastrar bot pelo token enviado pelo site
+app.post("/api/bots", async (req, res) => {
+  const token =
+    typeof req.body.token === "string"
+      ? req.body.token.trim()
+      : "";
+
+  if (!token) {
+    return res.status(400).json({
+      error: "Informe o token do bot."
+    });
+  }
+
+  const bots = readBots();
+
+  const id = crypto.randomUUID();
+
+  const botData = {
+    id,
+    token,
+    name: "Bot Discord",
+    active: true
+  };
+
   try {
-    const cargosMap = await criarCargos(message.guild);
+    const client = await startBot(botData);
 
-    const resultado = await criarEstrutura(
-      message.guild,
-      cargosMap
-    );
+    botData.name = client.user.username;
 
-    let resposta =
-      "Finalizado!\n" +
-      "Cargos configurados: " + cargos.length + "\n" +
-      "Categorias/canais criados: " + resultado.criados +
-      "\nJá existentes: " + resultado.existentes;
+    bots.push(botData);
+    saveBots(bots);
 
-    if (resultado.erros.length > 0) {
-      resposta +=
-        "\n\nCategorias com erro: " +
-        resultado.erros.join(", ");
-    }
-
-    await status.edit({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(
-            resultado.erros.length > 0
-              ? "#FFA500"
-              : "#57F287"
-          )
-          .setTitle("✅ CENTRAL DE GB SYSTEM")
-          .setDescription(resposta)
-          .setFooter({
-            text: "GB SYSTEM • Sistema de organização"
-          })
-          .setTimestamp()
-      ]
+    return res.json({
+      success: true,
+      bot: {
+        id: botData.id,
+        name: botData.name,
+        active: true,
+        online: true
+      }
     });
   } catch (erro) {
-    console.error("Erro geral ao criar:", erro);
+    console.error("Erro cadastrando bot:", erro);
 
-    await status.edit({
-      content:
-        "Ocorreu um erro durante a criação. Confira os logs da Railway e as permissões do bot.",
-      embeds: []
+    stopBot(id);
+
+    return res.status(400).json({
+      error: "Não foi possível conectar. Confira o token do bot."
     });
-  } finally {
-    servidoresCriando.delete(message.guild.id);
   }
 });
 
+// Ativar ou pausar bot
+app.patch("/api/bots/:id", async (req, res) => {
+  const bots = readBots();
+  const bot = bots.find(item => item.id === req.params.id);
+
+  if (!bot) {
+    return res.status(404).json({
+      error: "Bot não encontrado."
+    });
+  }
+
+  if (typeof req.body.active === "boolean") {
+    if (req.body.active) {
+      try {
+        await startBot(bot);
+        bot.active = true;
+      } catch (erro) {
+        console.error("Erro ativando bot:", erro);
+
+        return res.status(400).json({
+          error: "Não foi possível ativar o bot."
+        });
+      }
+    } else {
+      bot.active = false;
+      stopBot(bot.id);
+    }
+  }
+
+  saveBots(bots);
+
+  return res.json({
+    success: true,
+    bot: {
+      id: bot.id,
+      name: bot.name,
+      active: bot.active,
+      online: botClients.has(bot.id)
+    }
+  });
+});
+
+// Excluir bot do painel
+app.delete("/api/bots/:id", (req, res) => {
+  const bots = readBots();
+  const bot = bots.find(item => item.id === req.params.id);
+
+  if (!bot) {
+    return res.status(404).json({
+      error: "Bot não encontrado."
+    });
+  }
+
+  stopBot(bot.id);
+
+  saveBots(
+    bots.filter(item => item.id !== bot.id)
+  );
+
+  return res.json({
+    success: true
+  });
+});
+
 // ======================================================
-// LOGIN
+// RESTAURAR BOTS CADASTRADOS QUANDO RAILWAY INICIAR
 // ======================================================
 
-client.login(TOKEN);
+async function restaurarBots() {
+  const bots = readBots();
+
+  for (const bot of bots) {
+    if (!bot.active) continue;
+
+    try {
+      await startBot(bot);
+    } catch (erro) {
+      console.error(
+        "Não foi possível iniciar o bot " + bot.name,
+        erro
+      );
+    }
+  }
+}
+
+// ======================================================
+// INICIAR SERVIDOR
+// ======================================================
+
+app.listen(PORT, async () => {
+  console.log("CENTRAL GB SYSTEM online na porta " + PORT);
+
+  await restaurarBots();
+});
