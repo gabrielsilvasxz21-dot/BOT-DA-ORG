@@ -12,19 +12,61 @@ const path = require("path");
 
 const app = express();
 
-app.use(express.json({ limit: "10kb" }));
-app.use(express.static("public"));
+// ======================================
+// CONFIGURAÇÕES
+// ======================================
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY;
 const DATA_DIR = process.env.DATA_DIR || "./data";
 
+const ALLOWED_ORIGIN =
+  "https://gabrielsilvasxz21-dot.github.io";
+
 if (!ADMIN_KEY) {
-  console.error("Configure ADMIN_KEY no arquivo .env.");
+  console.error("Configure ADMIN_KEY nas variáveis da Railway.");
   process.exit(1);
 }
 
-const databaseFile = path.join(DATA_DIR, "bots.json");
+// ======================================
+// CORS - CONEXÃO COM GITHUB PAGES
+// ======================================
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin === ALLOWED_ORIGIN) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, x-admin-key"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, DELETE, OPTIONS"
+  );
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+app.use(express.json({ limit: "10kb" }));
+
+// ======================================
+// BANCO DE DADOS
+// ======================================
+
+const databaseFile = path.join(
+  DATA_DIR,
+  "bots.json"
+);
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -34,21 +76,39 @@ if (!fs.existsSync(databaseFile)) {
 
 function readBots() {
   try {
-    return JSON.parse(fs.readFileSync(databaseFile, "utf8"));
+    const data = fs.readFileSync(databaseFile, "utf8");
+    const bots = JSON.parse(data);
+
+    return Array.isArray(bots) ? bots : [];
+
   } catch (error) {
-    console.error("Erro ao ler bots.json:", error.message);
+    console.error("Erro ao ler banco:", error.message);
     return [];
   }
 }
 
 function saveBots(bots) {
-  fs.writeFileSync(databaseFile, JSON.stringify(bots, null, 2));
+  const tempFile = databaseFile + ".tmp";
+
+  fs.writeFileSync(
+    tempFile,
+    JSON.stringify(bots, null, 2)
+  );
+
+  fs.renameSync(tempFile, databaseFile);
 }
+
+// ======================================
+// AUTENTICAÇÃO ADMINISTRATIVA
+// ======================================
 
 function adminOnly(req, res, next) {
   const provided = req.headers["x-admin-key"];
 
-  if (!provided || provided !== ADMIN_KEY) {
+  if (
+    typeof provided !== "string" ||
+    provided !== ADMIN_KEY
+  ) {
     return res.status(401).json({
       error: "Acesso administrativo negado."
     });
@@ -57,11 +117,15 @@ function adminOnly(req, res, next) {
   next();
 }
 
+// ======================================
+// CLIENTES DOS BOTS
+// ======================================
+
 const botClients = new Map();
 
 async function startBot(botData) {
   if (botClients.has(botData.id)) {
-    return;
+    return true;
   }
 
   const client = new Client({
@@ -75,17 +139,19 @@ async function startBot(botData) {
   client.on("messageCreate", async message => {
     if (message.author.bot || !message.guild) return;
 
-    if (message.content.trim().toLowerCase() !== ".criar") {
+    if (
+      message.content.trim().toLowerCase() !== ".criar"
+    ) {
       return;
     }
 
     const bots = readBots();
-    const registered = bots.find(bot => bot.id === botData.id);
+
+    const registered = bots.find(
+      bot => bot.id === botData.id
+    );
 
     if (!registered || registered.status !== "active") {
-      await message.reply(
-        "Este bot está pausado ou não está autorizado pela CENTRAL DE GB SYSTEM."
-      );
       return;
     }
 
@@ -93,7 +159,8 @@ async function startBot(botData) {
       "CENTRAL DE GB SYSTEM está começando a criar!"
     );
 
-    // A criação de categorias e canais será integrada aqui.
+    // A criação automática de categorias
+    // e canais será integrada aqui.
   });
 
   try {
@@ -101,16 +168,23 @@ async function startBot(botData) {
 
     botClients.set(botData.id, client);
 
-    console.log("Bot conectado:", client.user.username);
+    console.log(
+      "Bot conectado:",
+      client.user.username
+    );
+
+    return true;
 
   } catch (error) {
     console.error(
-      "Não foi possível conectar o bot:",
+      "Erro ao conectar bot:",
       botData.username,
       error.message
     );
 
     client.destroy();
+
+    return false;
   }
 }
 
@@ -123,7 +197,21 @@ function stopBot(botId) {
   }
 }
 
+// ======================================
+// TESTE DA API
+// ======================================
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    online: true,
+    system: "CENTRAL DE GB SYSTEM"
+  });
+});
+
+// ======================================
 // LISTAR BOTS
+// ======================================
+
 app.get("/api/bots", adminOnly, (req, res) => {
   const bots = readBots();
 
@@ -137,22 +225,30 @@ app.get("/api/bots", adminOnly, (req, res) => {
   );
 });
 
+// ======================================
 // CADASTRAR BOT
-app.post("/api/bots", adminOnly, async (req, res) => {
-  const token = req.body.token;
+// ======================================
 
-  if (typeof token !== "string" || !token.trim()) {
+app.post("/api/bots", adminOnly, async (req, res) => {
+  const token = req.body?.token;
+
+  if (
+    typeof token !== "string" ||
+    !token.trim()
+  ) {
     return res.status(400).json({
       error: "Informe o token do bot."
     });
   }
+
+  const cleanToken = token.trim();
 
   const client = new Client({
     intents: [GatewayIntentBits.Guilds]
   });
 
   try {
-    await client.login(token.trim());
+    await client.login(cleanToken);
 
     const botId = client.user.id;
     const username = client.user.username;
@@ -171,17 +267,32 @@ app.post("/api/bots", adminOnly, async (req, res) => {
       id: botId,
       username,
       status: "active",
-      token: token.trim(),
+      token: cleanToken,
       createdAt: new Date().toISOString()
     };
 
     bots.push(botData);
+
     saveBots(bots);
 
-    await startBot(botData);
+    const connected = await startBot(botData);
+
+    if (!connected) {
+      const updatedBots = readBots().map(bot =>
+        bot.id === botId
+          ? { ...bot, status: "paused" }
+          : bot
+      );
+
+      saveBots(updatedBots);
+
+      return res.status(500).json({
+        error: "Bot cadastrado, mas não conseguiu iniciar."
+      });
+    }
 
     res.json({
-      message: "Bot cadastrado com sucesso.",
+      message: "Bot cadastrado com sucesso!",
       bot: {
         id: botId,
         username,
@@ -192,7 +303,10 @@ app.post("/api/bots", adminOnly, async (req, res) => {
   } catch (error) {
     client.destroy();
 
-    console.error("Erro ao cadastrar bot:", error.message);
+    console.error(
+      "Erro no cadastro:",
+      error.message
+    );
 
     res.status(400).json({
       error: "Token inválido ou bot não conseguiu conectar."
@@ -200,9 +314,12 @@ app.post("/api/bots", adminOnly, async (req, res) => {
   }
 });
 
+// ======================================
 // ATIVAR OU PAUSAR BOT
+// ======================================
+
 app.patch("/api/bots/:id", adminOnly, async (req, res) => {
-  const { status } = req.body;
+  const { status } = req.body || {};
 
   if (!["active", "paused"].includes(status)) {
     return res.status(400).json({
@@ -212,7 +329,9 @@ app.patch("/api/bots/:id", adminOnly, async (req, res) => {
 
   const bots = readBots();
 
-  const bot = bots.find(item => item.id === req.params.id);
+  const bot = bots.find(
+    item => item.id === req.params.id
+  );
 
   if (!bot) {
     return res.status(404).json({
@@ -220,27 +339,47 @@ app.patch("/api/bots/:id", adminOnly, async (req, res) => {
     });
   }
 
-  bot.status = status;
+  if (status === "paused") {
+    bot.status = "paused";
+
+    saveBots(bots);
+
+    stopBot(bot.id);
+
+    return res.json({
+      message: "Bot pausado com sucesso.",
+      status: "paused"
+    });
+  }
+
+  const connected = await startBot(bot);
+
+  if (!connected) {
+    return res.status(500).json({
+      error: "Não foi possível conectar o bot."
+    });
+  }
+
+  bot.status = "active";
 
   saveBots(bots);
 
-  if (status === "paused") {
-    stopBot(bot.id);
-  } else {
-    await startBot(bot);
-  }
-
   res.json({
-    message: "Status atualizado.",
-    status
+    message: "Bot ativado com sucesso.",
+    status: "active"
   });
 });
 
+// ======================================
 // REMOVER BOT
+// ======================================
+
 app.delete("/api/bots/:id", adminOnly, (req, res) => {
   const bots = readBots();
 
-  const bot = bots.find(item => item.id === req.params.id);
+  const bot = bots.find(
+    item => item.id === req.params.id
+  );
 
   if (!bot) {
     return res.status(404).json({
@@ -250,17 +389,24 @@ app.delete("/api/bots/:id", adminOnly, (req, res) => {
 
   stopBot(bot.id);
 
-  saveBots(
-    bots.filter(item => item.id !== bot.id)
+  const updatedBots = bots.filter(
+    item => item.id !== bot.id
   );
+
+  saveBots(updatedBots);
 
   res.json({
     message: "Bot removido da CENTRAL DE GB SYSTEM."
   });
 });
 
-// RESTAURAR BOTS AO INICIAR
+// ======================================
+// RESTAURAR BOTS
+// ======================================
+
 async function restoreBots() {
+  console.log("Restaurando bots cadastrados...");
+
   const bots = readBots();
 
   for (const bot of bots) {
@@ -268,9 +414,14 @@ async function restoreBots() {
       await startBot(bot);
     }
   }
+
+  console.log("Restauração finalizada.");
 }
 
+// ======================================
 // INICIAR SERVIDOR
+// ======================================
+
 app.listen(PORT, async () => {
   console.log(
     "CENTRAL DE GB SYSTEM online na porta " + PORT
